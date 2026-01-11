@@ -1,0 +1,32 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Skonfiguruj NBE StokerCloud v16",
+        "description": "Wprowadź dane logowania do swojego panelu StokerCloud.",
+        "data": {
+          "username": "Nazwa użytkownika (ID/MAC)",
+          "password": "Hasło"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Nieprawidłowa nazwa użytkownika lub hasło.",
+      "cannot_connect": "Błąd połączenia z serwerem StokerCloud."
+    },
+    "abort": {
+      "already_configured": "To urządzenie jest już skonfigurowane."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "boiler_temp": { "name": "Temperatura kotła" },
+      "target_temp": { "name": "Temperatura zadana" },
+      "state": { "name": "Status kotła" }
+    },
+    "number": {
+      "target_temp": { "name": "Ustaw zadaną temperaturę kotła" },
+      "dhw_target": { "name": "Ustaw zadaną temperaturę CWU" }
+    }
+  }
+}
