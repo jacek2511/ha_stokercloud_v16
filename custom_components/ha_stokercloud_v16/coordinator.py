@@ -5,7 +5,7 @@ import async_timeout
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from nbe_v16.client import StokerCloudClientV16  # Nazwa Twojej nowej biblioteki
+from stokercloud_v16.client import StokerCloudClientV16  # Nazwa Twojej nowej biblioteki
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
