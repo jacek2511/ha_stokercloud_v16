@@ -1372,7 +1372,7 @@ class StokerDiagnosticDump(StokerEntity, SensorEntity):
         
         # Wybieramy kluczowe sekcje do dumpu
         keys_to_dump = [
-            "weatherdata", "boilerdata", "hopperdata", "dhwdata", 
+            "weatherdata", "boilerdata", "hopperdata", "dhwdata", "infomessages",
             "frontdata", "miscdata", "leftoutput", "rightoutput", "stats"
         ]
         
