@@ -1,5 +1,5 @@
 {
-  "domain": "ha_stokercloud_v16",
+  "domain": "stokercloud_v16",
   "name": "NBE StokerCloud v16",
   "version": "1.0.0",
   "config_flow": true,
