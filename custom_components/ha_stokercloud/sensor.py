@@ -37,7 +37,9 @@ from .const import (
     PELLET_CALORIFIC_KWH,
     STOKER_STATES,
     STOKER_INFO,
-    SENSOR_MAP
+    SENSOR_MAP,
+    STOKER_OUTPUTS_CONFIG,
+    STOKER_SETTINGS_MENU_CONFIG
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -1423,27 +1425,11 @@ async def async_setup_entry(hass, entry, async_add_entities):
     ])
 
     # --- KONFIGURACJA WYJŚĆ (Outputs) ---
-    output_map = [
-        ("output-3", "Zawór pogodowy", "mdi:valve", "%"),
-        ("output-5", "Wentylator wyciągowy", "mdi:fan", "%"),
-        ("output-7", "Czyszczenie kotła", "mdi:compressor", "kg"),
-        ("output-6", "Odpopielanie", "mdi:trash-can", None),
-    ]
-    for out_id, out_name, out_icon, out_unit in output_map:
+    for out_id, out_name, out_icon, out_unit in STOKER_OUTPUTS_CONFIG:
         entities.append(StokerOutputSensor(coordinator, username, out_id, out_name, out_icon, out_unit))
 
     # --- KONFIGURACJA GRUPOWYCH USTAWIEŃ (Menus) ---
-    settings_map = [
-        ("Ustawienia Kotła", "boiler", "mdi:format-list-bulleted-type"),
-        ("Ustawienia CWU", "hot_water", "mdi:water-boiler-settings"),
-        ("Ustawienia Regulacji", "regulation", "mdi:tune"),
-        ("Ustawienia Nadmuchu", "fan", "mdi:fan-gear"),
-        ("Ustawienia Tlenu", "oxygen", "mdi:molecule-os"),
-        ("Ustawienia Czyszczenia", "cleaning", "mdi:broom"),
-        ("Ustawienia Zasobnika", "hopper", "mdi:tray-full"),
-        ("Ustawienia Pogodowe", "weather", "mdi:weather-partly-cloudy"),
-    ]
-    for name, menu_key, icon in settings_map:
+    for name, menu_key, icon in STOKER_SETTINGS_MENU_CONFIG:
         entities.append(StokerGroupedSettingsSensor(coordinator, username, name, menu_key, icon))
 
     # Dodanie pierwszej fali sensorów
