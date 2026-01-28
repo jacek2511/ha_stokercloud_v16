@@ -156,6 +156,26 @@ OUTPUT_SENSORS_CONFIG = [
     ("output-9", "Pompa Pogodowa 2", "mdi:heating-coil", "weather_pump_2"),
 ]
 
+# Konfiguracja Wyjść (Outputs)
+STOKER_OUTPUTS_CONFIG = [
+    ("output-3", "Zawór pogodowy", "mdi:valve", "%"),
+    ("output-5", "Wentylator wyciągowy", "mdi:fan", "%"),
+    ("output-7", "Czyszczenie kotła", "mdi:broom", "kg"),
+    ("output-6", "Odpopielanie", "mdi:trash-can", None),
+]
+
+# Konfiguracja Menu Ustawień
+STOKER_SETTINGS_MENU_CONFIG = [
+    ("Ustawienia Kotła", "boiler", "mdi:format-list-bulleted-type"),
+    ("Ustawienia CWU", "hot_water", "mdi:water-boiler-settings"),
+    ("Ustawienia Regulacji", "regulation", "mdi:tune"),
+    ("Ustawienia Nadmuchu", "fan", "mdi:fan-gear"),
+    ("Ustawienia Tlenu", "oxygen", "mdi:molecule-os"),
+    ("Ustawienia Czyszczenia", "cleaning", "mdi:broom"),
+    ("Ustawienia Zasobnika", "hopper", "mdi:tray-full"),
+    ("Ustawienia Pogodowe", "weather", "mdi:weather-partly-cloudy"),
+]
+
 WEATHER_ZONE_TRANSLATIONS = {
     "temp": "Temperatura aktualna", 
     "wanted": "Temperatura zadana", 
