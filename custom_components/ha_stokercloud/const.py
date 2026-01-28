@@ -54,7 +54,7 @@ STOKER_STATES: Final = {
     "state_99": "Błąd",
 }
 
-STOKER_INFO = {
+STOKER_INFO: Final = {
     2: "Niski poziom tlenu, pellet zablokowany",
     4: "Brak światła na fotoczujniku przez ponad 1 minutę",
     9: "Nowa wiadomość na Stokercloud.dk",
