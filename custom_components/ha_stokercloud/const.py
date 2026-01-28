@@ -54,6 +54,18 @@ STOKER_STATES: Final = {
     "state_99": "Błąd",
 }
 
+STOKER_INFO: Final = {                                  
+    20: "B....d zap..onu",                              
+    21: "Wysoka temperatura kot..a",                          
+    22: "Zatrzymanie zewn..trzne",                           
+    23: "Niski poziom pelletu",                                
+    24: "Wymagane czyszczenie",                                   
+    25: "B....d czujnika powrotu",                                        
+    26: "Ochrona przed mrozem",                     
+    27: "B....d komunikacji",                                   
+    28: "Pojemnik na popi.... pe..ny"                 
+}                                                                 
+
 CWU_MODES: Final = ["CWU", "Hot Water", "Grzanie wody", "state_7"]
 
 # --- KONFIGURACJA BINARY I OUTPUT ---
