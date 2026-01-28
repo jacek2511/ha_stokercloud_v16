@@ -36,6 +36,7 @@ from .const import (
     SPECIFIC_HEAT_WATER_KWH,
     PELLET_CALORIFIC_KWH,
     STOKER_STATES,
+    STOKER_INFO,
     SENSOR_MAP
 )
 
@@ -70,22 +71,36 @@ class StokerSensor(StokerEntity, SensorEntity):
 
     def _resolve_path(self, path):
         """Pomocnik do wyciągania danych ze słownika po ścieżce 'klucz.podklucz'."""
-        val = self.coordinator.data
-        for key in path.split('.'):
-            if isinstance(val, dict):
-                val = val.get(key)
-            else:
-                return None
-        return val
+        val = self.coordinator.data                                                                                             
+        if not val:                                                                                                             
+            return None                                                                                                         
+        for key in path.split('.'):                                                     
+            if isinstance(val, dict):                                                   
+                val = val.get(key)                                                      
+            else:                                                                       
+                return None                                                             
+        return val                                                                      
 
     @property
     def native_value(self):
         val = self._resolve_path(self._path)
-        
+
+        if isinstance(val, list):                                                       
+            val = val[0] if len(val) > 0 else None                                      
+
         # Logika mapowania stanu dla głównego sensora statusu
         if self._attr_unique_id.endswith("boiler_status"):
+            if val is None: return "Nieznany"                                                                                   
             raw = str(val).replace("lng_", "")
             return STOKER_STATES.get(raw, raw)
+        elif self._attr_unique_id.endswith("boiler_info"):                              
+            if val is None or val == "" or val == "0" or val ==0:                       
+                return "OK"                                                             
+            try:                                                                        
+                raw_info = int(val)                                                     
+                return STOKER_INFO.get(raw_info, raw_info)                              
+            except (ValueError, TypeError):                                             
+                return str(val)                                                         
             
         # Uniwersalna konwersja na float (obsługuje kropki i przecinki)
         if val is not None:
