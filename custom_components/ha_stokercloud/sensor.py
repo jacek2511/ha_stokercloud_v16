@@ -1399,7 +1399,6 @@ class StokerDiagnosticDump(StokerEntity, SensorEntity):
         
         return flat_data
 
-
 # --- SETUP ---
 async def async_setup_entry(hass, entry, async_add_entities):
     """Główna konfiguracja sensorów NBE w Home Assistant."""
@@ -1418,8 +1417,6 @@ async def async_setup_entry(hass, entry, async_add_entities):
         StokerDHWEfficiencySensor(coordinator, username),
         
         # Sensory wydzielonego zużycia (Logika rozdzielania Dom/Biuro)
-#        StokerHouseOnlyConsumptionSensor(coordinator, username),
-#        StokerExtraBuildingConsumptionSensor(coordinator, username),
         StokerDividedConsumptionSensor(coordinator, username, is_house=True),
         StokerDividedConsumptionSensor(coordinator, username, is_house=False),
     ])
