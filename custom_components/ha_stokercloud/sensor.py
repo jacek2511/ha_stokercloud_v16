@@ -1131,7 +1131,7 @@ class StokerDividedConsumptionSensor(CoordinatorEntity, SensorEntity, RestoreEnt
         boiler = self.hass.states.get(ENTITY_BOILER_STATUS)
 
         is_house_on = (pump_house and pump_house.state == "on")
-        is_office_active = (is_house_on and pump_office and pump_office.state == "on" and sw_o and switch_office.state == "on")
+        is_office_active = (is_house_on and pump_office and pump_office.state == "on" and switch_office and switch_office.state == "on")
         is_cwu = (boiler and boiler.state in ["CWU", "state_7"])
 
         # 5. LOGIKA PODZIAŁU (Z zachowaniem braku luki)
