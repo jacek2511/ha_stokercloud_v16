@@ -29,9 +29,17 @@ from .const import (
     ENTITY_PUMP_HOUSE,
     ENTITY_PUMP_OFFICE,                                                                                                         
     ENTITY_WIND_FACTOR,
-    ENTITY_BOILER_STATUS,                                                                                                        
+    ENTITY_BOILER_STATUS, 
+    ENTITY_INSULATION_FACTOR_HOUSE,
+    ENTITY_DHW_TANK_VOLUME,                                                                                                       
     SENSOR_HOUSE_EFFICIENCY,                                                                                                    
     SENSOR_OFFICE_EFFICIENCY,
+    SENSOR_HOPPER_CONTENT,
+    SENSOR_CONSUMPTION_TODAY,
+    SENSOR_FORECAST_TOTAL_WEIGHT,
+    SENSOR_HOUSE_CONSUMPTION_DAILY,
+    SENSOR_OFFICE_CONSUMPTION,
+    SENSOR_OFFICE_CONSUMPTION_DAILY,
     BOILER_EFFICIENCY_DHW,
     SPECIFIC_HEAT_WATER_KWH,
     PELLET_CALORIFIC_KWH,
@@ -298,8 +306,8 @@ class StokerEfficiencySensor(StokerEntity, SensorEntity, RestoreEntity):
 
             # 5. Blokada CWU / Statusu
             # Jeśli kocioł grzeje wodę, nie aktualizujemy średniej, ale resetujemy licznik czasu
-            boiler_status = self.hass.states.get("sensor.nbe_boiler_status")
-            if boiler_status and boiler_status.state in ["CWU", "state_7"]:
+            boiler_status = self._get_api_data("miscdata.state.value")
+            if boiler_status and boiler_status.state in ["CWU", "state_7", "lng_state_7"]:
                 self._last_consumption_val = current_kg
                 self._last_calc_time = now
                 self.async_write_ha_state()
@@ -402,7 +410,7 @@ class StokerEfficiencyDeviationSensor(CoordinatorEntity, SensorEntity):
         # Wykorzystanie SENSOR_HOUSE_EFFICIENCY z const.py
         eff_state = self.hass.states.get(SENSOR_HOUSE_EFFICIENCY)
         # Suwak referencyjny (Twoje założenie jak dom powinien trzymać ciepło)
-        ins_state = self.hass.states.get("number.nbe_insulation_factor_house")
+        ins_state = self.hass.states.get(ENTITY_INSULATION_FACTOR_HOUSE)
         
         if not eff_state or not ins_state or eff_state.state in ["unknown", "unavailable"]: 
             return 0.0
@@ -509,7 +517,7 @@ class StokerUnifiedForecastSensor(CoordinatorEntity, SensorEntity):
             delta_house_temp = max(0, target_house_temp - ext_temp)
             
             idx_house_eff = self._get_value_safely(SENSOR_HOUSE_EFFICIENCY, 0.8)
-            consumed_house = self._get_value_safely("sensor.nbe_house_pellet_daily", 0.0)
+            consumed_house = self._get_value_safely(SENSOR_HOUSE_CONSUMPTION_DAILY, 0.0)
             
             # Prognoza Domu = To co już spalił + (indeks * delta_house_temp / 24h) * pozostały czas
             predicted_rem_house = (idx_house_eff * delta_house_temp / 24.0) * hours_left_today
@@ -523,7 +531,7 @@ class StokerUnifiedForecastSensor(CoordinatorEntity, SensorEntity):
             delta_office_temp = max(0, target_office_temp - ext_temp)
             
             idx_office_eff = self._get_value_safely(SENSOR_OFFICE_EFFICIENCY, 0.6)
-            consumed_office = self._get_value_safely("sensor.nbe_extra_building_pellet_daily", 0.0)
+            consumed_office = self._get_value_safely(SENSOR_OFFICE_CONSUMPTION_DAILY, 0.0)
             
             predicted_rem_office = 0.0
             if is_office_on:
@@ -533,9 +541,9 @@ class StokerUnifiedForecastSensor(CoordinatorEntity, SensorEntity):
 
             # --- 5. CWU (DHW) ---
             # Fizyczny model zapotrzebowania na dogrzanie zasobnika
-            curr_temp_dhw = self._get_attribute_safely("sensor.nbe_dhw_temperature", "dhw_low_temperature", 40.0)
-            target_temp_dhw = self._get_attribute_safely("sensor.nbe_dhw_temperature", "dhw_temperature_requested", 50.0)
-            tank_vol = self._get_value_safely("number.nbe_dhw_tank_volume", 200.0)
+            curr_temp_dhw = self._get_api_data("dhwdata.8")
+            target_temp_dhw = self._get_api_data("frontdata.dhwwanted")
+            tank_vol = self._get_value_safely(ENTITY_DHW_TANK_VOLUME, 200.0)
             
             # Jeśli woda jest chłodniejsza niż zadana (histereza), liczmy koszt dogrzania
             temp_gap_dhw = max(0, (target_temp_dhw + 5) - curr_temp_dhw) 
@@ -664,7 +672,7 @@ class StokerForecastSensor(CoordinatorEntity, SensorEntity):
             if self._is_fixed:
                 dhw_sensor = self.hass.states.get("sensor.nbe_dhw_temperature")
                 if dhw_sensor:
-                    v_state = self.hass.states.get("number.nbe_dhw_tank_volume")
+                    v_state = self.hass.states.get(ENTITY_DHW_TANK_VOLUME)
                     
                     volume = float(v_state.state) if v_state and v_state.state not in ["unknown", "unavailable"] else 200.0
                     
@@ -855,7 +863,7 @@ class StokerExtraBuildingCostSensor(CoordinatorEntity, SensorEntity, RestoreEnti
                 self._attr_native_value = 0.0
         
         # Pobieramy aktualny stan licznika KG biura (pamiętaj, aby nazwa sensora była spójna)
-        kg_state = self.hass.states.get("sensor.nbe_extra_building_consumption")
+        kg_state = self.hass.states.get(SENSOR_OFFICE_CONSUMPTION)
         if kg_state and kg_state.state not in ["unknown", "unavailable"]:
             try:
                 self._last_known_kg_total = float(kg_state.state)
@@ -865,7 +873,7 @@ class StokerExtraBuildingCostSensor(CoordinatorEntity, SensorEntity, RestoreEnti
     def _handle_coordinator_update(self) -> None:
         """Obliczanie kosztu biura na podstawie przyrostu KG."""
         # Pobieramy dane wejściowe: ile biuro spaliło i ile kosztuje pellet
-        kg_state = self.hass.states.get("sensor.nbe_extra_building_consumption")
+        kg_state = self.hass.states.get(SENSOR_OFFICE_CONSUMPTION)
         p_state = self.hass.states.get(ENTITY_PELLET_PRICE)
 
         if not kg_state or kg_state.state in ["unknown", "unavailable"]:
@@ -1197,12 +1205,12 @@ class StokerRangeSensor(CoordinatorEntity, SensorEntity):
         """
         try:
             # 1. Ile kg pelletu jest teraz w zbiorniku?
-            current_pellet_kg = self._get_value_safely("sensor.nbe_hopper_content", 0.0)
+            current_pellet_kg = self._get_value_safely(SENSOR_HOPPER_CONTENT, 0.0)
 
             # 2. Jakie jest prognozowane spalanie na dziś (Dom + Biuro + CWU)?
             # Używamy sensora StokerTotalForecastSensor, który przygotowaliśmy wcześniej
-            daily_forecast_burn_consumption = self._get_value_safely("sensor.nbe_forecast_total_weight", 0.0)
-            daily_burn_consumption = self._get_value_safely("sensor.nbe_consumption_today", 0.0)
+            daily_forecast_burn_consumption = self._get_value_safely(SENSOR_FORECAST_TOTAL_WEIGHT, 0.0)
+            daily_burn_consumption = self._get_value_safely(SENSOR_CONSUMPTION_TODAY, 0.0)
             daily_burn_rate = daily_forecast_burn_consumption + daily_burn_consumption
 
             # Zabezpieczenie przed dzieleniem przez zero i trybem letnim
