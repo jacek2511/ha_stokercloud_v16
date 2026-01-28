@@ -223,5 +223,6 @@ SENSOR_MAP: Final = [
         "pressure": "weatherdata.5",
         "cloud_cover": "weatherdata.9"
     }),
-    ("Zużycie pelletu CWU dzisiaj", "dhw_consumption_today", "stats.dhw_day", UnitOfMass.KILOGRAMS, SensorDeviceClass.WEIGHT, SensorStateClass.TOTAL, "mdi:water-boiler-auto", None)
+    ("Zużycie pelletu CWU dzisiaj", "dhw_consumption_today", "stats.dhw_day", UnitOfMass.KILOGRAMS, SensorDeviceClass.WEIGHT, SensorStateClass.TOTAL, "mdi:water-boiler-auto", None),
+    ("Informacja", "boiler_info", "infomessages", None, None, None, "mdi:information", None)
 ]
