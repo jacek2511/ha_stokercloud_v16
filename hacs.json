@@ -1,5 +1,6 @@
 {
   "name": "NBE Stokercloud_v16",
   "render_readme": true,
-  "country": ["PL"]
+  "country": ["PL"],
+  "content_directory": "custom_components/stokercloud_v16"
 }
