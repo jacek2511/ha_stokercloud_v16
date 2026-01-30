@@ -198,9 +198,9 @@ STOKER_OUTPUTS_CONFIG = [
 # Konfiguracja Menu Ustawień
 STOKER_SETTINGS_MENU_CONFIG = [
     ("Ustawienia Kotła", "boiler", "mdi:format-list-bulleted-type"),
-    ("Ustawienia CWU", "hot_water", "mdi:water-boiler-settings"),
+    ("Ustawienia CWU", "hot_water", "mdi:water-boiler"),
     ("Ustawienia Regulacji", "regulation", "mdi:tune"),
-    ("Ustawienia Nadmuchu", "fan", "mdi:fan-gear"),
+    ("Ustawienia Nadmuchu", "fan", "mdi:fan"),
     ("Ustawienia Tlenu", "oxygen", "mdi:fire"),
     ("Ustawienia Czyszczenia", "cleaning", "mdi:broom"),
     ("Ustawienia Zasobnika", "hopper", "mdi:tray-full"),
@@ -222,7 +222,7 @@ SIMPLE_NUMBERS_CONFIG = [
     ("wind_factor", "Współczynnik wiatru", 0, 20, 1, PERCENTAGE, "mdi:wind-power", 5, "slider"),
     ("dhw_tank_volume", "Pojemność bojlera", 50, 1000, 10, "l", "mdi:barrel", 200, "box"),
     ("system_efficiency", "Sprawność grzania CWU", 10, 100, 1, PERCENTAGE, "mdi:gauge", 85, "slider"),
-    ("anomaly_threshold", "Anomalia wydajności", 5, 100, 5, PERCENTAGE, "mdi:alert-percent", 20, "slider"),
+    ("anomaly_threshold", "Anomalia wydajności", 5, 100, 5, PERCENTAGE, "mdi:alert-circle", 20, "slider"),
     ("office_time_shift", "Czas stabilizacji biura", 0, 60, 1, "min", "mdi:timer-sand", 10, "slider"),                              
     ("insulation_factor_house", "Charakterystyka strat - Dom", 0.05, 2, 0.01, "kg/°C/24h", "mdi:home-thermometer-outline", 0.6, "box"),                                    
     ("insulation_factor_extra", "Charakterystyka strat - Biuro", 0.05, 2, 0.01, "kg/°C/24h", "mdi:home-thermometer-outline", 1.2, "box"),
@@ -245,7 +245,7 @@ SENSOR_MAP: Final = [
     }),
     ("Konsumpcja dzienna", "consumption_today", "stats.day", UnitOfMass.KILOGRAMS, SensorDeviceClass.WEIGHT, SensorStateClass.TOTAL, "mdi:chart-bell-curve", None),
     ("Pellet w zasobniku", "hopper_content", "frontdata.hoppercontent", UnitOfMass.KILOGRAMS, SensorDeviceClass.WEIGHT, SensorStateClass.MEASUREMENT, "mdi:tray-full", None),
-    ("Poziom tlenu", "oxygen_current", "boilerdata.12", PERCENTAGE, None, SensorStateClass.MEASUREMENT, "mdi:molecule-os", {
+    ("Poziom tlenu", "oxygen_current", "boilerdata.12", PERCENTAGE, None, SensorStateClass.MEASUREMENT, "mdi:fire-circle", {
         "oxygen_reference": "frontdata.oxyr"
     }),
     ("Ciśnienie zwrotne", "backpressure", "miscdata.backpressure", "Pa", None, SensorStateClass.MEASUREMENT, "mdi:gauge", None),
