@@ -23,6 +23,7 @@ class StokerEntity(CoordinatorEntity):
         )
 
     def _get_api_data(self, path: str, default=None):
+        """Metoda pomocnicza dostępna dla wszystkich typów encji."""
         val = self.coordinator.data
         if not val: return default
         for part in path.split("."):

@@ -13,6 +13,7 @@ class StokerCloudV16ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(self, user_input=None):
         errors = {}
         if user_input is not None:
+            # POPRAWKA: Użycie funkcji zamiast hass.helpers
             session = async_get_clientsession(self.hass)
             
             client = StokerCloudClientV16(
@@ -28,6 +29,7 @@ class StokerCloudV16ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     data=user_input
                 )
             except Exception as e:
+                # Logowanie błędu pomaga w diagnostyce
                 _LOGGER.error("Szczegóły błędu w ConfigFlow: %s", str(e) or type(e).__name__)
                 errors["base"] = "invalid_auth"
 

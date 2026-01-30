@@ -10,7 +10,7 @@ from homeassistant.const import (
 )
 
 # --- KONFIGURACJA PODSTAWOWA ---
-DOMAIN: Final = "ha_stokercloud_v16"
+DOMAIN: Final = "stokercloud_v16"
 CONF_USERNAME: Final = "username"
 CONF_PASSWORD: Final = "password"
 
@@ -20,6 +20,7 @@ ENTITY_BOILER_STATUS: Final = "sensor.nbe_boiler_status"
 ENTITY_PUMP_HOUSE: Final = "binary_sensor.nbe_weather_pump_1"
 ENTITY_PUMP_OFFICE: Final = "binary_sensor.nbe_weather_pump_2"
 ENTITY_SWITCH_OFFICE: Final = "switch.nbe_extra_building_logic"
+ENTITY_OFFICE_TIME_SHIFT: Final = "number.nbe_office_time_shift"
 ENTITY_TEMP_TARGET_HOUSE: Final = "number.nbe_comfort_temperature"
 ENTITY_TEMP_TARGET_OFFICE: Final = "number.nbe_extra_building_target_temp"
 ENTITY_WIND_FACTOR: Final = "number.nbe_wind_factor"
@@ -28,19 +29,19 @@ ENTITY_DHW_TANK_VOLUME: Final = "number.nbe_dhw_tank_volume"
 ENTITY_CALORIFIC: Final = "input_number.nbe_pellet_calorific_mj"
 ENTITY_PELLET_PRICE: Final = "number.nbe_pellet_price"
 ENTITY_PELLET_TOTAL: Final = "sensor.nbe_pellet_total_consumption"
+ENTITY_HOUSE_CONSUMPTION_DAILY: Final = "sensor.nbe_house_consumption_daily"
+ENTITY_OFFICE_CONSUMPTION_DAILY: Final = "sensor.nbe_office_consumption_daily"
+
 
 # --- WEWNĘTRZNE ID SENSORÓW ---
 SENSOR_HOUSE_EFFICIENCY: Final = "sensor.nbe_house_efficiency"
 SENSOR_OFFICE_EFFICIENCY: Final = "sensor.nbe_extra_efficiency"
 SENSOR_HOPPER_CONTENT: Final = "sensor.nbe_hopper_content"
-SENSOR_CONSUMPTION_TODAY: Final = "sensor.nbe_consumption_today"
+SENSOR_DHW_TEMPERATURE: Final = "sensor.nbe_dhw_temperature"
 SENSOR_FORECAST_TOTAL_WEIGHT: Final = "sensor.nbe_forecast_total_weight"
-SENSOR_HOUSE_CONSUMPTION_DAILY: Final = "sensor.nbe_house_pellet_daily"
-SENSOR_OFFICE_CONSUMPTION: Final = "sensor.nbe_extra_building_consumption"
-SENSOR_OFFICE_CONSUMPTION_DAILY: Final = "sensor.nbe_extra_building_pellet_daily"
 
 # --- KONFIGURACJA FIZYCZNA ---
-DEFAULT_CALORIFIC_MJ: Final = 17.5
+DEFAULT_CALORIFIC_MJ: Final = 18.0
 SPECIFIC_HEAT_WATER_KWH: Final = 0.00116  # kWh/kg*K
 PELLET_CALORIFIC_KWH: Final = 4.8         # kWh z 1 kg
 BOILER_EFFICIENCY_DHW: Final = 0.85       # Sprawność grzania CWU
@@ -177,7 +178,7 @@ STOKER_SETTINGS_MENU_CONFIG = [
     ("Ustawienia CWU", "hot_water", "mdi:water-boiler-settings"),
     ("Ustawienia Regulacji", "regulation", "mdi:tune"),
     ("Ustawienia Nadmuchu", "fan", "mdi:fan-gear"),
-    ("Ustawienia Tlenu", "oxygen", "mdi:molecule-os"),
+    ("Ustawienia Tlenu", "oxygen", "mdi:fire"),
     ("Ustawienia Czyszczenia", "cleaning", "mdi:broom"),
     ("Ustawienia Zasobnika", "hopper", "mdi:tray-full"),
     ("Ustawienia Pogodowe", "weather", "mdi:weather-partly-cloudy"),
@@ -192,13 +193,16 @@ WEATHER_ZONE_TRANSLATIONS = {
 }
 
 SIMPLE_NUMBERS_CONFIG = [
-    ("pellet_price", "Cena pelletu", 500, 5000, 10, "PLN/t", "mdi:cash", 1250),
-    ("comfort_temperature", "Temperatura komfortu", 15, 28, 0.5, UnitOfTemperature.CELSIUS, "mdi:thermometer-lines", 22),
-    ("extra_building_target_temp", "Temperatura Biura", 5, 25, 0.5, UnitOfTemperature.CELSIUS, "mdi:office-building-marker", 15),
-    ("wind_factor", "Współczynnik wiatru", 0, 20, 1, PERCENTAGE, "mdi:wind-power", 5),
-    ("dhw_tank_volume", "Pojemność bojlera", 50, 1000, 10, "l", "mdi:barrel", 200),
-    ("system_efficiency", "Sprawność grzania CWU", 10, 100, 1, PERCENTAGE, "mdi:gauge", 85),
-    ("anomaly_threshold", "Anomalia wydajności", 5, 100, 5, PERCENTAGE, "mdi:alert-percent", 20),
+    ("pellet_price", "Cena pelletu", 500, 4000, 10, "PLN/t", "mdi:cash", 1250, "auto"),
+    ("comfort_temperature", "Temperatura komfortu", 15, 28, 0.5, UnitOfTemperature.CELSIUS, "mdi:thermometer-lines", 22, "auto"),
+    ("extra_building_target_temp", "Temperatura Biura", 5, 25, 0.5, UnitOfTemperature.CELSIUS, "mdi:office-building-marker", 10, "auto"),
+    ("wind_factor", "Współczynnik wiatru", 0, 20, 1, PERCENTAGE, "mdi:wind-power", 5, "slider"),
+    ("dhw_tank_volume", "Pojemność bojlera", 50, 1000, 10, "l", "mdi:barrel", 200, "box"),
+    ("system_efficiency", "Sprawność grzania CWU", 10, 100, 1, PERCENTAGE, "mdi:gauge", 85, "slider"),
+    ("anomaly_threshold", "Anomalia wydajności", 5, 100, 5, PERCENTAGE, "mdi:alert-percent", 20, "slider"),
+    ("office_time_shift", "Czas stabilizacji biura", 0, 60, 1, "min", "mdi:timer-sand", 10, "slider"),                              
+    ("insulation_factor_house", "Charakterystyka strat - Dom", 0.05, 2, 0.01, "kg/°C/24h", "mdi:home-thermometer-outline", 0.6, "box"),                                    
+    ("insulation_factor_extra", "Charakterystyka strat - Biuro", 0.05, 2, 0.01, "kg/°C/24h", "mdi:home-thermometer-outline", 1.2, "box"),
 ]
 
 SENSOR_MAP: Final = [

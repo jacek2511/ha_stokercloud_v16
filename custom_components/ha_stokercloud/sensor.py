@@ -25,21 +25,20 @@ from .const import (
     ENTITY_SWITCH_OFFICE,
     ENTITY_TEMP_TARGET_HOUSE,
     ENTITY_TEMP_TARGET_OFFICE,
+    ENTITY_OFFICE_TIME_SHIFT,
     ENTITY_PELLET_PRICE,
     ENTITY_PUMP_HOUSE,
-    ENTITY_PUMP_OFFICE,                                                                                                         
+    ENTITY_PUMP_OFFICE,
     ENTITY_WIND_FACTOR,
-    ENTITY_BOILER_STATUS, 
+    ENTITY_BOILER_STATUS,
+    ENTITY_HOUSE_CONSUMPTION_DAILY,
+    ENTITY_OFFICE_CONSUMPTION_DAILY,
+    ENTITY_DHW_TANK_VOLUME,
     ENTITY_INSULATION_FACTOR_HOUSE,
-    ENTITY_DHW_TANK_VOLUME,                                                                                                       
-    SENSOR_HOUSE_EFFICIENCY,                                                                                                    
+    SENSOR_HOUSE_EFFICIENCY,
     SENSOR_OFFICE_EFFICIENCY,
-    SENSOR_HOPPER_CONTENT,
-    SENSOR_CONSUMPTION_TODAY,
     SENSOR_FORECAST_TOTAL_WEIGHT,
-    SENSOR_HOUSE_CONSUMPTION_DAILY,
-    SENSOR_OFFICE_CONSUMPTION,
-    SENSOR_OFFICE_CONSUMPTION_DAILY,
+    SENSOR_DHW_TEMPERATURE,
     BOILER_EFFICIENCY_DHW,
     SPECIFIC_HEAT_WATER_KWH,
     PELLET_CALORIFIC_KWH,
@@ -49,6 +48,7 @@ from .const import (
     STOKER_OUTPUTS_CONFIG,
     STOKER_SETTINGS_MENU_CONFIG
 )
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -81,37 +81,37 @@ class StokerSensor(StokerEntity, SensorEntity):
 
     def _resolve_path(self, path):
         """Pomocnik do wyciągania danych ze słownika po ścieżce 'klucz.podklucz'."""
-        val = self.coordinator.data                                                                                             
-        if not val:                                                                                                             
-            return None                                                                                                         
-        for key in path.split('.'):                                                     
-            if isinstance(val, dict):                                                   
-                val = val.get(key)                                                      
-            else:                                                                       
-                return None                                                             
-        return val                                                                      
+        val = self.coordinator.data
+        if not val:
+            return None
+        for key in path.split('.'):
+            if isinstance(val, dict):
+                val = val.get(key)
+            else:
+                return None
+        return val
 
     @property
     def native_value(self):
         val = self._resolve_path(self._path)
-
-        if isinstance(val, list):                                                       
-            val = val[0] if len(val) > 0 else None                                      
+        
+        if isinstance(val, list):
+            val = val[0] if len(val) > 0 else None
 
         # Logika mapowania stanu dla głównego sensora statusu
         if self._attr_unique_id.endswith("boiler_status"):
-            if val is None: return "Nieznany"                                                                                   
+            if val is None: return "Nieznany"
             raw = str(val).replace("lng_", "")
             return STOKER_STATES.get(raw, raw)
-        elif self._attr_unique_id.endswith("boiler_info"):                              
-            if val is None or val == "" or val == "0" or val ==0:                       
-                return "OK"                                                             
-            try:                                                                        
-                raw_info = int(val)                                                     
-                return STOKER_INFO.get(raw_info, raw_info)                              
-            except (ValueError, TypeError):                                             
-                return str(val)                                                         
-            
+        elif self._attr_unique_id.endswith("boiler_info"):                                                                      
+            if val is None or val == "" or val == "0" or val ==0:
+                return "OK"
+            try:
+                raw_info = int(val)   
+                return STOKER_INFO.get(raw_info, raw_info)
+            except (ValueError, TypeError):
+                return str(val)
+
         # Uniwersalna konwersja na float (obsługuje kropki i przecinki)
         if val is not None:
             try:
@@ -210,7 +210,7 @@ class StokerEfficiencySensor(StokerEntity, SensorEntity, RestoreEntity):
     def __init__(self, coordinator, username, name, uid, consumption_sid, target_temp_sid, attr_name=None, use_wind=False, *args, **kwargs):
         super().__init__(coordinator, username)
         self.entity_id = f"sensor.nbe_{uid}_efficiency"
-        self._attr_name = f"NBE {name} Indeks efektywności"
+        self._attr_name = f"{name} Indeks efektywności"
         self._attr_unique_id = f"nbe_{username}_{uid}_efficiency"
         self._attr_native_unit_of_measurement = "kg/°C/24h"
         self._attr_state_class = SensorStateClass.MEASUREMENT
@@ -219,32 +219,31 @@ class StokerEfficiencySensor(StokerEntity, SensorEntity, RestoreEntity):
         self._uid = uid 
         self._consumption_sid = consumption_sid 
         self._target_temp_sid = target_temp_sid 
-        self._attr_name_source = attr_name               
+        self._attr_name_source = attr_name                
         self._use_wind = use_wind
         
-        # Obliczenia wewnętrzne
         self._last_consumption_val = None
         self._last_calc_time = None
         self._current_efficiency = 0.8  
-        self._office_start_timestamp = None        
+        self._office_start_timestamp = None
+        self._office_last_pump_on_time = None 
 
-        # Filtr EMA (wygładzanie)
         self._alpha = 0.1  
         self._instant_kg_per_hour = 0.0
-        
-        # Diagnostyka
         self._diag_house_share = 0.0
         self._diag_office_share = 0.0
+        self._debug_pump_state = "off"
+        self._dynamic_limit_cache = 20.0
 
     async def async_added_to_hass(self):
-        """Przywrócenie stanu po restarcie."""
         await super().async_added_to_hass()
         last_state = await self.async_get_last_state()
-        if last_state and last_state.state not in ["unknown", "unavailable"]:
-            try:
-                self._current_efficiency = float(last_state.state)
-            except ValueError:
-                pass
+        if last_state:
+            if last_state.state not in ["unknown", "unavailable"]:
+                try: self._current_efficiency = float(last_state.state)
+                except ValueError: pass
+            old_ts = last_state.attributes.get("office_start_ts")
+            if old_ts: self._office_start_timestamp = float(old_ts)
 
     @property
     def native_value(self):
@@ -253,140 +252,151 @@ class StokerEfficiencySensor(StokerEntity, SensorEntity, RestoreEntity):
     @property
     def extra_state_attributes(self):
         now = time.time()
-        
-        # Bezpieczne pobranie stanu pompy biura
-        pump_2 = self.hass.states.get(ENTITY_PUMP_OFFICE)
-        office_active = pump_2.state == "on" if pump_2 else False
-
-        is_shifting = False
-        if self._office_start_timestamp is not None:
-            is_shifting = (now - self._office_start_timestamp) / 60 < 20
+        pump_on = (self._debug_pump_state == "on")
+        elapsed_min = (now - self._office_start_timestamp) / 60 if self._office_start_timestamp else 0
+        time_left = max(0, self._dynamic_limit_cache - elapsed_min) if pump_on and elapsed_min < self._dynamic_limit_cache else 0
 
         return {
             "burn_rate_total_kg_h": round(self._instant_kg_per_hour, 3),
             "assigned_to_house_kg_h": round(self._diag_house_share, 3),
             "assigned_to_office_kg_h": round(self._diag_office_share, 3),
-            "office_heating_active": office_active,
-            "time_shift_active": is_shifting,
+            "office_heating_active": pump_on,
+            "time_shift_active": pump_on and (0 < elapsed_min < 20),
+            "time_shift_elapsed_min": round(elapsed_min, 1) if pump_on else 0,
+            "time_shift_limit_min": round(self._dynamic_limit_cache, 1),
+            "time_shift_remaining_min": round(time_left, 1),
+            "office_start_time": datetime.fromtimestamp(self._office_start_timestamp).strftime('%d-%m-%Y %H:%M:%S') if self._office_start_timestamp else "Nieaktywne"
         }
 
     def _handle_coordinator_update(self) -> None:
-        """Główna logika obliczeniowa."""
         try:
-            state_obj = self.hass.states.get(self._consumption_sid)
-            if not state_obj or state_obj.state in ["unknown", "unavailable"]:
-                return
-
-            # 1. Odczyt licznika
-            try:
-                if self._attr_name_source:
-                    current_kg = float(state_obj.attributes.get(self._attr_name_source, 0))
-                else:
-                    current_kg = float(state_obj.state)
-            except (ValueError, TypeError): 
-                return
-
             now = time.time()
+            
+            # 1. POMPY I CZAS
+            sw_biuro = self.hass.states.get(ENTITY_SWITCH_OFFICE)
+            pump_biuro = self.hass.states.get(ENTITY_PUMP_OFFICE)
+            switch_is_on = (sw_biuro.state != "off") if sw_biuro else True
+            pump_is_on = (pump_biuro and pump_biuro.state == "on")
+            self._debug_pump_state = "on" if pump_is_on else "off"
 
-            # 2. Obsługa inicjalizacji i resetów
+            if switch_is_on and pump_is_on:
+                self._office_last_pump_on_time = now
+                if not self._office_start_timestamp: self._office_start_timestamp = now
+            elif not switch_is_on:
+                self._office_start_timestamp = None
+            elif not pump_is_on and self._office_start_timestamp:
+                if self._office_last_pump_on_time and (now - self._office_last_pump_on_time) > 600:
+                    self._office_start_timestamp = None
+
+            # 2. POGODA I PROGNOZY (Zawsze aktualne)
+            t_state = self.hass.states.get(self._target_temp_sid)
+            temp_target = float(t_state.state) if t_state and t_state.state not in ["unknown", "unavailable"] else 22.0
+            wd = (self.coordinator.data or {}).get("weatherdata", {})
+            try:
+                temp_ext = float(str(wd.get("1", 0)).replace(",", "."))
+            except:
+                temp_ext = 0.0
+           
+            shift_entity = self.hass.states.get(ENTITY_OFFICE_TIME_SHIFT)                                                       
+            base_shift = float(shift_entity.state) if shift_entity and shift_entity.state not in ["unknown", "unavailable"] else 10.0
+            temp_adjustment = max(0, (10.0 - temp_ext) / 5.0) * 4.0                                                             
+            self._dynamic_limit_cache = base_shift + temp_adjustment                                                                  
+ 
+            delta_t = max(1.0, temp_target - temp_ext)
+            effective_delta = delta_t
+            if self._use_wind:
+                try:
+                    wind_speed = float(str(wd.get("2", 0)).replace(",", "."))
+                    wind_factor_state = self.hass.states.get(ENTITY_WIND_FACTOR)
+                    wind_factor = (float(wf_state.state) / 100.0) if wind_factor_state else 0.05
+                    effective_delta = delta_t * (1 + (wind_speed * wind_factor))
+                except: pass
+
+            # Indeksy do podziału proporcjonalnego
+            house_eff_sensor = self.hass.states.get(SENSOR_HOUSE_EFFICIENCY)
+            idx_house = float(house_eff_sensor.state) if house_eff_sensor and house_eff_sensor.state not in ["unknown", "unavailable"] else 0.62
+            
+            # PROGNOZOWANE zapotrzebowanie (ile strefa "chciałaby" spalić)
+            pred_house = (idx_house * effective_delta) / 24.0
+            pred_office = (self._current_efficiency * effective_delta) / 24.0
+
+            # 3. SPALANIE (Blokada 5 min)
+            state_obj = self.hass.states.get(self._consumption_sid)
+            if not state_obj or state_obj.state in ["unknown", "unavailable"]: return
+
+            try: current_kg = float(state_obj.attributes.get(self._attr_name_source, 0)) if self._attr_name_source else float(state_obj.state)
+            except: return
+
             if self._last_consumption_val is None or current_kg < self._last_consumption_val:
                 self._last_consumption_val = current_kg
                 self._last_calc_time = now
                 return
 
-            # 3. Sprawdzenie okna 5 minut
             time_diff_sec = now - self._last_calc_time
             if time_diff_sec < 300:
-                return
-
-            # 4. Obliczenie chwilowego tempa (kg/h)
-            delta_kg = current_kg - self._last_consumption_val
-            time_diff_hours = time_diff_sec / 3600.0
-            self._instant_kg_per_hour = delta_kg / time_diff_hours if delta_kg > 0.01 else 0.0
-
-            # 5. Blokada CWU / Statusu
-            # Jeśli kocioł grzeje wodę, nie aktualizujemy średniej, ale resetujemy licznik czasu
-            boiler_status = self._get_api_data("miscdata.state.value")
-            if boiler_status and boiler_status.state in ["CWU", "state_7", "lng_state_7"]:
-                self._last_consumption_val = current_kg
-                self._last_calc_time = now
+                # W czasie oczekiwania pokazujemy prognozę w atrybutach
+                self._diag_house_share = pred_house
+                self._diag_office_share = pred_office
                 self.async_write_ha_state()
                 return
 
-            # 6. Obliczanie Delta T
-            t_state = self.hass.states.get(self._target_temp_sid)
-            temp_target = float(t_state.state) if t_state and t_state.state not in ["unknown", "unavailable"] else 22.0
-            
-            wd = (self.coordinator.data or {}).get("weatherdata", {})
-            try:
-                temp_ext = float(str(wd.get("1", 0)).replace(",", "."))
-            except: 
-                temp_ext = 0.0
-            
-            delta_t = max(1.0, temp_target - temp_ext)
-            effective_delta = delta_t
+            delta_kg = current_kg - self._last_consumption_val
+            self._instant_kg_per_hour = delta_kg / (time_diff_sec / 3600.0) if delta_kg > 0.005 else 0.0
 
-            if self._use_wind:
-                try:
-                    wind_speed = float(str(wd.get("2", 0)).replace(",", "."))
-                    wf_state = self.hass.states.get(ENTITY_WIND_FACTOR)
-                    w_fact = (float(wf_state.state) / 100.0) if wf_state else 0.05
-                    effective_delta = delta_t * (1 + (wind_speed * w_fact))
-                except: 
-                    pass
+            # 4.ZAMROŻENIE INDEKSU PODCZAS CWU (Przywrócone) ---
+            boiler_status = self.hass.states.get(ENTITY_BOILER_STATUS)
+            if boiler_status and boiler_status.state in ["CWU", "state_7"]:
+                self._last_consumption_val = current_kg
+                self._last_calc_time = now
+                self._diag_house_share = pred_house
+                self._diag_office_share = pred_office
+                self.async_write_ha_state()
+                return
 
-            # 7. Rozdzielenie Dom vs Biuro
-            sw_biuro = self.hass.states.get(ENTITY_SWITCH_OFFICE)
-            pump_biuro = self.hass.states.get(ENTITY_PUMP_OFFICE)
-            is_office_heating = (sw_biuro and sw_biuro.state == "on") and (pump_biuro and pump_biuro.state == "on")
-            
-            if is_office_heating:
-                if self._office_start_timestamp is None:
-                    self._office_start_timestamp = now
-            else:
-                self._office_start_timestamp = None
+            # 5. INTELIGENTNY ROZDZIAŁ
+            is_office_active = (switch_is_on and pump_is_on)
+            elapsed = (now - self._office_start_timestamp) / 60 if self._office_start_timestamp else 0
+            is_office_reliable = is_office_active and elapsed >= self._dynamic_limit_cache
             
             new_instant_eff = self._current_efficiency
-            do_math_update = False 
+            do_math_update = False
 
             if self._uid == "house":
-                if not is_office_heating:
-                    new_instant_eff = (self._instant_kg_per_hour * 24.0) / effective_delta
+                if not is_office_reliable:
                     self._diag_house_share = self._instant_kg_per_hour
-                    self._diag_office_share = 0.0
+                    self._diag_office_share = pred_office
+                    new_instant_eff = (self._instant_kg_per_hour * 24.0) / effective_delta
                     do_math_update = True
                 else:
-                    self._diag_house_share = self._instant_kg_per_hour # logujemy tempo, ale nie zmieniamy średniej
+                    # PROPORCJA: Jeśli obie strefy grzeją, dzielimy spalanie wg potrzeb
+                    total_pred = pred_house + pred_office
+                    self._diag_house_share = self._instant_kg_per_hour * (pred_house / total_pred)
+                    self._diag_office_share = self._instant_kg_per_hour * (pred_office / total_pred)
 
             elif self._uid == "extra":
-                if is_office_heating:
-                    elapsed = (now - self._office_start_timestamp) / 60 if self._office_start_timestamp else 0
-                    if elapsed >= 20:
-                        house_eff_sensor = self.hass.states.get(SENSOR_HOUSE_EFFICIENCY)
-                        idx_h = float(house_eff_sensor.state) if house_eff_sensor and house_eff_sensor.state not in ["unknown", "unavailable"] else 0.8
-                        
-                        # Przewidywane zużycie domu przy obecnej temp (z marginesem 10%)
-                        house_baseline_kg_h = (idx_h * 1.10 * effective_delta) / 24.0
-                        office_kg_h = max(0.0, self._instant_kg_per_hour - house_baseline_kg_h)
-                        
-                        self._diag_house_share = house_baseline_kg_h
-                        self._diag_office_share = office_kg_h
-                        new_instant_eff = (office_kg_h * 24.0) / effective_delta
-                        do_math_update = True
-                    else:
-                        self._diag_office_share = 0.0
+                if is_office_reliable:
+                    total_pred = pred_house + pred_office
+                    # Biuro dostaje swoją proporcjonalną część
+                    office_kg_h = self._instant_kg_per_hour * (pred_office / total_pred)
+                    self._diag_office_share = office_kg_h
+                    self._diag_house_share = self._instant_kg_per_hour - office_kg_h
+                    
+                    new_instant_eff = (office_kg_h * 24.0) / effective_delta
+                    do_math_update = True
+                else:
+                    self._diag_office_share = pred_office
+                    self._diag_house_share = self._instant_kg_per_hour
 
-            # 8. FINALIZACJA - Kluczowe dla działania sensora
+            # 6. FINALIZACJA
             if do_math_update and 0.1 < new_instant_eff < 15.0:
                 self._current_efficiency = (self._current_efficiency * (1 - self._alpha)) + (new_instant_eff * self._alpha)
             
-            # Zawsze zapisujemy punkt odniesienia dla kolejnego okna 5 minut
             self._last_consumption_val = current_kg
             self._last_calc_time = now
             self.async_write_ha_state()
 
         except Exception as e:
-            _LOGGER.error("Błąd krytyczny wydajności %s: %s", self._uid, e)
+            _LOGGER.error("Błąd wydajności %s: %s", self._uid, e)
  
 
 # --- EFFICENCY DEVIATION SENSOR ---
@@ -398,12 +408,11 @@ class StokerEfficiencyDeviationSensor(CoordinatorEntity, SensorEntity):
         self._username = username
         self.entity_id = "sensor.nbe_insulation_deviation"
         self._attr_has_entity_name = True
-        self._attr_name = "NBE Odchylenie izolacji"
+        self._attr_name = "Odchylenie izolacji"
         self._attr_unique_id = f"nbe_{username}_insulation_deviation"
         self._attr_native_unit_of_measurement = "kg/°C/24h"
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:slope-uphill"
-
 
     @property
     def native_value(self):
@@ -464,13 +473,13 @@ class StokerUnifiedForecastSensor(CoordinatorEntity, SensorEntity):
         # Konfiguracja tożsamości encji
         if self._type == "weight":
             self.entity_id = f"sensor.nbe_forecast_{target}_weight"
-            self._attr_name = f"NBE - Prognoza {name_prefix} (KG)"
+            self._attr_name = f"Prognoza {name_prefix} (KG)"
             self._attr_native_unit_of_measurement = "kg"
             self._attr_device_class = SensorDeviceClass.WEIGHT
             self._attr_icon = "mdi:chart-line"
         else:
             self.entity_id = f"sensor.nbe_forecast_{target}_cost"
-            self._attr_name = f"NBE - Prognoza {name_prefix} (PLN)"
+            self._attr_name = f"Prognoza {name_prefix} (PLN)"
             self._attr_native_unit_of_measurement = "PLN"
             self._attr_device_class = SensorDeviceClass.MONETARY
             self._attr_icon = "mdi:cash-multiple"
@@ -508,16 +517,24 @@ class StokerUnifiedForecastSensor(CoordinatorEntity, SensorEntity):
             except (ValueError, TypeError): 
                 ext_temp = 0.0
             
+            wind_factor = 1.0
+            try:
+                wind_speed = float(str(weather_data.get("2", 0)).replace(",", "."))
+                wf_state = self.hass.states.get(ENTITY_WIND_FACTOR)
+                w_val = (float(wf_state.state) / 100.0) if wf_state else 0.05
+                wind_factor = 1.0 + (wind_speed * w_val)
+            except: pass
+ 
             # --- 2. PARAMETRY I STAŁE ---
             # Używamy stałych z const.py (efektywność spalania dla wody)
-            eff_energy_kg = PELLET_CALORIFIC_KWH * BOILER_EFFICIENCY_DHW # np. 4.8 * 0.85 = 4.08 kWh/kg
+            eff_energy_kg = PELLET_CALORIFIC_KWH * BOILER_EFFICIENCY_DHW
 
             # --- 3. DOM (HOUSE) ---
-            target_house_temp = self._get_value_safely(ENTITY_TEMP_TARGET_HOUSE, 22.0)
-            delta_house_temp = max(0, target_house_temp - ext_temp)
+            target_house_temp = self._get_value_safely(ENTITY_TEMP_TARGET_HOUSE, 23.0)
+            delta_house_temp = max(0, (target_house_temp - ext_temp) * wind_factor   )
             
             idx_house_eff = self._get_value_safely(SENSOR_HOUSE_EFFICIENCY, 0.8)
-            consumed_house = self._get_value_safely(SENSOR_HOUSE_CONSUMPTION_DAILY, 0.0)
+            consumed_house = self._get_value_safely(ENTITY_HOUSE_CONSUMPTION_DAILY, 0.0)
             
             # Prognoza Domu = To co już spalił + (indeks * delta_house_temp / 24h) * pozostały czas
             predicted_rem_house = (idx_house_eff * delta_house_temp / 24.0) * hours_left_today
@@ -528,30 +545,42 @@ class StokerUnifiedForecastSensor(CoordinatorEntity, SensorEntity):
             is_office_on = sw_office and sw_office.state == "on"
             
             target_office_temp = self._get_value_safely(ENTITY_TEMP_TARGET_OFFICE, 18.0)
-            delta_office_temp = max(0, target_office_temp - ext_temp)
+            delta_office_temp = max(0, (target_office_temp - ext_temp) * wind_factor)
             
             idx_office_eff = self._get_value_safely(SENSOR_OFFICE_EFFICIENCY, 0.6)
-            consumed_office = self._get_value_safely(SENSOR_OFFICE_CONSUMPTION_DAILY, 0.0)
+            consumed_office = self._get_value_safely(ENTITY_OFFICE_CONSUMPTION_DAILY, 0.0)
             
             predicted_rem_office = 0.0
             if is_office_on:
-                predicted_rem_o = (idx_office_eff * delta_office_temp / 24.0) * hours_left_today
+                predicted_rem_office = (idx_office_eff * delta_office_temp / 24.0) * hours_left_today
             
             forecast_office_total = consumed_office + predicted_rem_office
 
             # --- 5. CWU (DHW) ---
-            # Fizyczny model zapotrzebowania na dogrzanie zasobnika
-            curr_temp_dhw = self._get_api_data("dhwdata.8")
-            target_temp_dhw = self._get_api_data("frontdata.dhwwanted")
+            data = self.coordinator.data or {}
+            
+            consumed_dhw = float(data.get("stats", {}).get("dhw_day", 0.0))
+            target_temp_dhw = float(data.get("frontdata", {}).get("dhwwanted", 50.0))
+            curr_temp_dhw = float(data.get("dhwdata", {}).get("8", 40.0))
+            hysteresis = float(data.get("dhwdata", {}).get("3", 5.0))
+
             tank_vol = self._get_value_safely(ENTITY_DHW_TANK_VOLUME, 200.0)
             
             # Jeśli woda jest chłodniejsza niż zadana (histereza), liczmy koszt dogrzania
-            temp_gap_dhw = max(0, (target_temp_dhw + 5) - curr_temp_dhw) 
+            temp_gap_dhw = max(0, (target_temp_dhw - curr_temp_dhw)) 
             
-            needed_dhw_kg = 0.0
-            if temp_gap_dhw > 5.0: # Dogrzewanie gdy spadnie o 5 stopni
-                energy_kwh = tank_vol * temp_gap_dhw * SPECIFIC_HEAT_WATER_KWH
-                needed_dhw_kg = energy_kwh / eff_energy_kg
+            needed_dhw_now_kg = 0.0
+
+            # Jeśli temperatura spadła poniżej (zadana - histereza), grzanie CWU
+            if curr_temp_dhw < (target_temp_dhw - hysteresis):
+                energy_now_kwh = tank_vol * temp_gap_dhw * SPECIFIC_HEAT_WATER_KWH
+                needed_dhw_now_kg = energy_now_kwh / eff_energy_kg
+            
+            # straty postojowe (58W bojlera + cyrkulacja okazjonalna)
+            # 0.014 (bojler) + 0.006 (dodatek na cyrkulację) = 0.02 kg/h
+            standby_loss_rate = 0.02  
+            standby_loss_kg = hours_left_today * standby_loss_rate
+            forecast_dhw_total = consumed_dhw + needed_dhw_now_kg + standby_loss_kg
 
             # --- 6. AGREGACJA WYNIKU ---
             if self._target == "house":
@@ -559,9 +588,9 @@ class StokerUnifiedForecastSensor(CoordinatorEntity, SensorEntity):
             elif self._target == "office":
                 res_kg = forecast_office_total
             elif self._target == "dhw":
-                res_kg = needed_dhw_kg
+                res_kg = forecast_dhw_total
             else: # "total"
-                res_kg = forecast_house_total + forecast_office_total + needed_dhw_kg
+                res_kg = forecast_house_total + forecast_office_total + forecast_dhw_total
 
             # --- 7. KONWERSJA NA WALUTĘ LUB KG ---
             if self._type == "weight":
@@ -579,7 +608,7 @@ class StokerUnifiedForecastSensor(CoordinatorEntity, SensorEntity):
 class StokerForecastSensor(CoordinatorEntity, SensorEntity):
     """
     Sensor prognozy statycznej (obliczeniowej).
-    Pozwala na symulację kosztów/zużycia na podstawie suwaków lub indeksów wydajności.
+    Pozwala na symulację kosztów/zużycia na podstawie indeksów wydajności.
     """
     def __init__(self, coordinator, username, name, uid, efficiency_sid, target_temp_sid, 
                  is_fixed=False, force_index=False, force_slider=False, 
@@ -593,7 +622,7 @@ class StokerForecastSensor(CoordinatorEntity, SensorEntity):
         suffix = "weight" if return_kg else "cost"
         self.entity_id = f"sensor.nbe_forecast_{uid.lower()}_{suffix}"
         
-        self._attr_name = f"NBE Prognoza - {name}"
+        self._attr_name = f"Prognoza - {name}"
         self._attr_unique_id = f"nbe_{username}_{uid}_forecast_{suffix}"
         self._return_kg = return_kg
         
@@ -640,8 +669,8 @@ class StokerForecastSensor(CoordinatorEntity, SensorEntity):
         # Specyficzne encje dla modelu CWU
         if self._is_fixed:
             tracked_entities.extend([
-                "number.nbe_dhw_tank_volume", 
-                "sensor.nbe_dhw_temperature"
+                ENTITY_DHW_TANK_VOLUME, 
+                SENSOR_DHW_TEMPERATURE
             ])
             
         for entity_id in tracked_entities:
@@ -670,21 +699,22 @@ class StokerForecastSensor(CoordinatorEntity, SensorEntity):
 
             # 2. Model CWU (Stały zład wody)
             if self._is_fixed:
-                dhw_sensor = self.hass.states.get("sensor.nbe_dhw_temperature")
+                data = self.coordinator.data or {}
+                dhw_sensor = float(data.get("frontdata", {}).get("dhw", 40.0))
                 if dhw_sensor:
                     v_state = self.hass.states.get(ENTITY_DHW_TANK_VOLUME)
                     
                     volume = float(v_state.state) if v_state and v_state.state not in ["unknown", "unavailable"] else 200.0
                     
                     # Pobieramy atrybuty temperatury z sensora CWU
-                    t_target = float(dhw_sensor.attributes.get("dhw_temperature_requested", 50.0)) + 5
-                    t_actual = float(dhw_sensor.attributes.get("dhw_low_temperature", 40.0))
+                    temp_target = float(data.get("frontdata", {}).get("dhwwanted", 50.0)) + 10
+                    temp_actual = float(data.get("dhwdata", {}).get("8", 40.0))
                     
-                    delta_t_dhw = max(0, t_target - t_actual)
+                    delta_temp_dhw = max(0, temp_target - temp_actual)
                     
                     # Obliczenie energii: (V * deltaT * ciepło_właściwe) / (wartość_opałowa * sprawność)
                     # 1.163 to Wh/kgK (zmienione na kWh w stałej)
-                    energy_kwh = volume * delta_t_dhw * SPECIFIC_HEAT_WATER_KWH
+                    energy_kwh = volume * delta_temp_dhw * SPECIFIC_HEAT_WATER_KWH
                     result_kg = energy_kwh / (PELLET_CALORIFIC_KWH * BOILER_EFFICIENCY_DHW)
 
             # 3. Model Budynków (Grzejniki/Podłogówka)
@@ -749,7 +779,7 @@ class StokerCostTotalSensor(CoordinatorEntity, SensorEntity, RestoreEntity):
         super().__init__(coordinator)
         self._username = username
         self.entity_id = f"sensor.nbe_{uid}_cost_total"
-        self._attr_name = f"NBE Koszt całkowity - {name}"
+        self._attr_name = f"Koszt całkowity - {name}"
         self._attr_unique_id = f"nbe_{username}_{uid}_cost_total"
         self._attr_native_unit_of_measurement = "PLN"
         self._attr_device_class = SensorDeviceClass.MONETARY
@@ -828,89 +858,6 @@ class StokerCostTotalSensor(CoordinatorEntity, SensorEntity, RestoreEntity):
             _LOGGER.error("Błąd przetwarzania liczb w sensorze kosztu %s: %s", self.entity_id, e)
 
 
-# --- OFFICE COST SENSOR ---
-class StokerExtraBuildingCostSensor(CoordinatorEntity, SensorEntity, RestoreEntity):
-    """
-    Sensor dedykowany do zliczania kosztów ogrzewania biura (Extra Building).
-    Akumuluje PLN na podstawie wydzielonego zużycia KG dla biura.
-    """
-
-    def __init__(self, coordinator, username):
-        super().__init__(coordinator)
-        self._username = username
-        self.entity_id = "sensor.nbe_extra_building_cost_total"
-        self._attr_unique_id = f"nbe_{username}_extra_building_cost_total"
-        self._attr_name = "NBE Biuro - Koszt całkowity"
-        self._attr_native_unit_of_measurement = "PLN"
-        
-        # Statystyki długoterminowe (Energy Dashboard compatibility)
-        self._attr_state_class = SensorStateClass.TOTAL
-        self._attr_device_class = SensorDeviceClass.MONETARY
-        self._attr_icon = "mdi:office-building-cog"
-        
-        self._attr_native_value = 0.0
-        self._last_known_kg_total = 0.0
-
-    async def async_added_to_hass(self):
-        """Przywrócenie stanu finansowego po restarcie HA."""
-        await super().async_added_to_hass()
-        last_state = await self.async_get_last_state()
-        
-        if last_state is not None and last_state.state not in ["unknown", "unavailable"]:
-            try:
-                self._attr_native_value = float(last_state.state)
-            except ValueError:
-                self._attr_native_value = 0.0
-        
-        # Pobieramy aktualny stan licznika KG biura (pamiętaj, aby nazwa sensora była spójna)
-        kg_state = self.hass.states.get(SENSOR_OFFICE_CONSUMPTION)
-        if kg_state and kg_state.state not in ["unknown", "unavailable"]:
-            try:
-                self._last_known_kg_total = float(kg_state.state)
-            except ValueError:
-                self._last_known_kg_total = 0.0
-
-    def _handle_coordinator_update(self) -> None:
-        """Obliczanie kosztu biura na podstawie przyrostu KG."""
-        # Pobieramy dane wejściowe: ile biuro spaliło i ile kosztuje pellet
-        kg_state = self.hass.states.get(SENSOR_OFFICE_CONSUMPTION)
-        p_state = self.hass.states.get(ENTITY_PELLET_PRICE)
-
-        if not kg_state or kg_state.state in ["unknown", "unavailable"]:
-            return
-
-        try:
-            current_kg_total = float(kg_state.state)
-            
-            # Cena za kg z const.py (fallback na 1.2 PLN/kg, czyli 1200/t)
-            price_per_kg = 1.2
-            if p_state and p_state.state not in ["unknown", "unavailable"]:
-                price_per_kg = float(p_state.state) / 1000
-            
-            # Obliczamy deltę KG od ostatniej aktualizacji
-            if current_kg_total > self._last_known_kg_total:
-                kg_delta = current_kg_total - self._last_known_kg_total
-                cost_increment = kg_delta * price_per_kg
-                
-                # Dodajemy do dotychczasowej sumy (akumulator)
-                self._attr_native_value = round((self._attr_native_value or 0.0) + cost_increment, 2)
-                self._last_known_kg_total = current_kg_total
-                
-                _LOGGER.debug(
-                    "Biuro: +%s PLN (delta %s kg)", 
-                    round(cost_increment, 2), round(kg_delta, 3)
-                )
-            
-            # Obsługa resetu licznika KG (np. na początku nowego miesiąca/dnia)
-            elif current_kg_total < self._last_known_kg_total:
-                self._last_known_kg_total = current_kg_total
-
-            self.async_write_ha_state()
-
-        except (ValueError, TypeError) as e:
-            _LOGGER.error("Błąd obliczeń kosztów biura: %s", e)
-
-
 # --- ACTUAL HEATING COST SENSOR ---
 class StokerHeatingCostActualSensor(CoordinatorEntity, SensorEntity):
     """Sensor wyliczający koszt aktualnego zużycia dobowego (chwilowy)."""
@@ -920,7 +867,7 @@ class StokerHeatingCostActualSensor(CoordinatorEntity, SensorEntity):
         self._username = username
         self.entity_id = "sensor.nbe_heating_cost_actual"
         self._attr_has_entity_name = True
-        self._attr_name = "NBE Koszt aktualny (Dziś)"
+        self._attr_name = "Koszt aktualny (Dziś)"
         self._attr_unique_id = f"nbe_{username}_cost_actual"
         self._attr_native_unit_of_measurement = "PLN"
         self._attr_device_class = SensorDeviceClass.MONETARY
@@ -942,90 +889,6 @@ class StokerHeatingCostActualSensor(CoordinatorEntity, SensorEntity):
         except Exception as e:
             _LOGGER.debug("Błąd obliczeń kosztu dobowego: %s", e)
             return 0.0
-
-
-# --- TOTAL FORECAST COST SENSOR ---
-class StokerTotalForecastSensor(CoordinatorEntity, SensorEntity):
-    """
-    Sensor agregujący (Suma prognoz).
-    Łączy wyniki z sensorów domu, biura i CWU w jedną spójną wartość (KG lub PLN).
-    """
-    def __init__(self, coordinator, username, sensor_ids, uid="total_cost", name="Łączny koszt prognozowany"):
-        super().__init__(coordinator)
-        self._username = username
-        self._sensor_ids = sensor_ids  # Lista sensorów do śledzenia
-        
-        # Ustalenie ID encji
-        self.entity_id = f"sensor.nbe_forecast_{uid}"
-        self._attr_name = f"NBE - {name}"
-        self._attr_unique_id = f"nbe_{username}_{uid}"
-        
-        # Automatyczna konfiguracja jednostek na podstawie UID
-        if "weight" in uid or "kg" in uid:
-            self._attr_native_unit_of_measurement = UnitOfMass.KILOGRAMS
-            self._attr_device_class = SensorDeviceClass.WEIGHT
-            self._attr_state_class = SensorStateClass.MEASUREMENT
-            self._attr_icon = "mdi:weight-kilogram"
-        else:
-            self._attr_native_unit_of_measurement = "PLN"
-            self._attr_device_class = SensorDeviceClass.MONETARY
-            self._attr_state_class = SensorStateClass.TOTAL
-            self._attr_icon = "mdi:sigma"
-
-    async def async_added_to_hass(self):
-        """Rejestracja nasłuchiwania zmian w sensorach składowych."""
-        await super().async_added_to_hass()
-        for sid in self._sensor_ids:
-            if sid:
-                # Każda zmiana sensora składowego wymusza przeliczenie sumy
-                self.async_on_remove(
-                    async_track_state_change_event(self.hass, sid, self._update_manual_trigger)
-                )
-
-    async def _update_manual_trigger(self, event):
-        """Wymusza odświeżenie stanu w Home Assistant."""
-        self.async_write_ha_state()
-
-    @property
-    def native_value(self):
-        """
-        Oblicza sumę całkowitą. 
-        Specjalna logika dla CWU: uwzględnia większą z wartości (prognoza vs realne zużycie).
-        """
-        actual_hot_water = 0.0
-        forecast_hot_water = 0.0
-        other_sensors_sum = 0.0
-
-        for sid in self._sensor_ids:
-            state = self.hass.states.get(sid)
-            if not state or state.state in ["unknown", "unavailable", None]:
-                continue
-                
-            try:
-                val = float(state.state)
-                
-                # LOGIKA SPECJALNA DLA CWU:
-                # Szukamy słów kluczowych w ID sensora
-                if "dhw" in sid or "hot_water" in sid:
-                    if "forecast" in sid:
-                        forecast_hot_water = val
-                    else:
-                        actual_hot_water = val
-                else:
-                    # Dom, Biuro i inne sensory dodajemy liniowo
-                    other_sensors_sum += val
-                    
-            except ValueError:
-                continue
-
-        # LOGIKA PROGNOZY CWU:
-        # Jeśli kocioł już spalił 2kg na wodę, a prognoza na resztę dnia mówi o 1kg,
-        # to bierzemy to co faktycznie zużyte, chyba że prognoza (zapotrzebowanie) jest wyższa.
-        combined_hot_water = max(forecast_hot_water, actual_hot_water)
-        
-        total = other_sensors_sum + combined_hot_water
-        
-        return round(total, 2)
 
 
 # --- HOUSE & OFFICE CONSUMPTION SENSOR ---
@@ -1136,7 +999,7 @@ class StokerDividedConsumptionSensor(CoordinatorEntity, SensorEntity, RestoreEnt
 
         # 5. LOGIKA PODZIAŁU (Z zachowaniem braku luki)
         increment = 0.0
-        TOLERANCE = 1.00 # Używamy Twojego marginesu 1.10
+        TOLERANCE = 1.15
 
         if is_cwu:
             increment = 0.0
@@ -1175,7 +1038,7 @@ class StokerDividedConsumptionSensor(CoordinatorEntity, SensorEntity, RestoreEnt
 # --- PELLETS LEFT FOR DAYS SENSOR ---
 class StokerRangeSensor(CoordinatorEntity, SensorEntity):
     """
-    Hybrydowy sensor zasięgu. 
+    Sensor zasięgu. 
     Łączy aktualny stan zasobnika z dynamicznym modelem zapotrzebowania (Burn Rate).
     """
     def __init__(self, coordinator, username):
@@ -1204,28 +1067,28 @@ class StokerRangeSensor(CoordinatorEntity, SensorEntity):
         Oblicza zasięg: Aktualna waga w kg / Prognozowane spalanie na dobę.
         """
         try:
+            data = self.coordinator.data or {}
+
             # 1. Ile kg pelletu jest teraz w zbiorniku?
-            current_pellet_kg = self._get_value_safely(SENSOR_HOPPER_CONTENT, 0.0)
+            current_pellet_kg = float(data.get("frontdata", {}).get("hoppercontent", 0.0))
 
             # 2. Jakie jest prognozowane spalanie na dziś (Dom + Biuro + CWU)?
             # Używamy sensora StokerTotalForecastSensor, który przygotowaliśmy wcześniej
-            daily_forecast_burn_consumption = self._get_value_safely(SENSOR_FORECAST_TOTAL_WEIGHT, 0.0)
-            daily_burn_consumption = self._get_value_safely(SENSOR_CONSUMPTION_TODAY, 0.0)
-            daily_burn_rate = daily_forecast_burn_consumption + daily_burn_consumption
+            forecast_daily_burn_rate = self._get_value_safely(SENSOR_FORECAST_TOTAL_WEIGHT, 0.0)
 
             # Zabezpieczenie przed dzieleniem przez zero i trybem letnim
             # Jeśli spalanie jest śladowe (< 0.5kg/dobę), zakładamy "nieskończony" zasięg
-            if daily_burn_rate < 0.5:
+            if forecast_daily_burn_rate < 0.5:
                 return 99.0
 
             # Obliczamy pozostałe dni
-            days_remaining = current_pellet_kg / daily_burn_rate
+            days_remaining = current_pellet_kg / forecast_daily_burn_rate
 
             # Zwracamy wynik z dokładnością do 0.1 dnia (np. 4.5 dnia)
             return round(days_remaining, 1)
 
         except Exception as e:
-            _LOGGER.error("Błąd obliczania hybrydowego zasięgu: %s", e)
+            _LOGGER.error("Błąd obliczania zasięgu: %s", e)
             return None
 
     @property
@@ -1235,7 +1098,6 @@ class StokerRangeSensor(CoordinatorEntity, SensorEntity):
         if val and val != 99.0:
             return {"status": "Wymaga uwagi" if val < 2 else "Stabilny"}
         return {"status": "Nieznany"}
-
 
 
 # --- DHW TOTAL CONSUMPTION SENSOR ---
@@ -1252,7 +1114,6 @@ class StokerDHWConsumptionTotalSensor(StokerEntity, SensorEntity, RestoreEntity)
         
         self._attr_native_unit_of_measurement = UnitOfMass.KILOGRAMS
         self._attr_device_class = SensorDeviceClass.WEIGHT
-        # TOTAL_INCREASING jest kluczowe dla Dashboardu Energia
         self._attr_state_class = SensorStateClass.TOTAL_INCREASING
         self._attr_icon = "mdi:water-boiler"
         
@@ -1397,7 +1258,7 @@ class StokerDiagnosticDump(StokerEntity, SensorEntity):
         
         # Wybieramy kluczowe sekcje do dumpu
         keys_to_dump = [
-            "weatherdata", "boilerdata", "hopperdata", "dhwdata", "infomessages",
+            "weatherdata", "boilerdata", "hopperdata", "dhwdata", "infomessages", 
             "frontdata", "miscdata", "leftoutput", "rightoutput", "stats"
         ]
         
@@ -1406,6 +1267,7 @@ class StokerDiagnosticDump(StokerEntity, SensorEntity):
                 flat_data[key] = data[key]
         
         return flat_data
+
 
 # --- SETUP ---
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -1447,12 +1309,12 @@ async def async_setup_entry(hass, entry, async_add_entities):
             StokerCostTotalSensor(coordinator, username, "Dom", "house", "sensor.nbe_house_consumption_total"),
             StokerCostTotalSensor(coordinator, username, "Biuro", "extra", "sensor.nbe_extra_building_consumption_total"),
             StokerCostTotalSensor(coordinator, username, "CWU", "dhw", "sensor.nbe_dhw_consumption_total"),
+            StokerHeatingCostActualSensor(coordinator, username),
 
             # 2. Indeksy efektywności i odchylenia
             StokerEfficiencySensor(coordinator, username, "Dom", "house", "sensor.nbe_consumption_statistics", "number.nbe_comfort_temperature", "month", use_wind=True),
             StokerEfficiencySensor(coordinator, username, "Biuro", "extra", "sensor.nbe_consumption_statistics", "number.nbe_extra_building_target_temp", "month", use_wind=True),
             StokerEfficiencyDeviationSensor(coordinator, username),
-            StokerHeatingCostActualSensor(coordinator, username),
 
             # 3. Symulatory (PLN)
             StokerForecastSensor(coordinator, username, "Dom (Symulacja)", "house_sim", None, "number.nbe_comfort_temperature", force_slider=True, uid_for_slider="house"),
