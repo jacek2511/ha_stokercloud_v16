@@ -18,7 +18,7 @@ You can install the plugin via HACS using the following steps
 
 When you add the integration, an empty field will appear. You need to enter your StokerCloud username.
 
-Currently the integration is read-only so you do not need to enter your password
+Currently the integration is read-only.
 
 
 [latest_release]: https://github.com/jacek2511/ha_stokercloud_v16/releases/latest
