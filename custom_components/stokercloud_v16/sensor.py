@@ -17,7 +17,6 @@ from homeassistant.const import (
     EntityCategory,
 )
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-# Poprawiony import dla zdarzeń
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.components.sensor import ENTITY_ID_FORMAT                                                                        
@@ -1019,10 +1018,7 @@ class StokerDividedConsumptionSensor(StokerEntity, SensorEntity, RestoreEntity):
 
 # --- PELLETS LEFT FOR DAYS SENSOR ---
 class StokerRangeSensor(StokerEntity, SensorEntity):
-    """
-    Sensor zasięgu. 
-    Łączy aktualny stan zasobnika z dynamicznym modelem zapotrzebowania (Burn Rate).
-    """
+    """ Sensor zasięgu. """
     def __init__(self, coordinator, username):
         super().__init__(coordinator, username)
         self._username = username
@@ -1035,36 +1031,25 @@ class StokerRangeSensor(StokerEntity, SensorEntity):
 
     @property
     def native_value(self):
-        """Oblicza zasięg: 70% Realne spalanie (wczoraj) + 30% Prognoza."""
         try:
             data = self.coordinator.data or {}
             current_pellet_kg = float(self._get_api_data("frontdata.hoppercontent", 0.0))
-
-            # 1. Pobieramy spalanie z wczoraj (fakt)
             yesterday_burn = float(self._get_api_data("stats.yesterday", 0.0))
-
-            # 2. Pobieramy prognozę (teoria)
             forecast_rate = self._get_value_safely(SENSOR_FORECAST_TOTAL_WEIGHT, 0.0)
 
-            # 3. Model hybrydowy z przewagą faktów (70/30)
             if yesterday_burn > 0 and forecast_rate > 0:
-                daily_burn_rate = (yesterday_burn * 0.7) + (forecast_rate * 0.3)
+                daily_burn_rate = (yesterday_burn * 0.85) + (forecast_rate * 0.15)
             elif yesterday_burn > 0:
                 daily_burn_rate = yesterday_burn
             else:
                 daily_burn_rate = forecast_rate
-
-            # Zabezpieczenie przed dzieleniem przez zero
             if daily_burn_rate < 0.5:
                 return 99.0
-
             days_remaining = current_pellet_kg / daily_burn_rate
             
-            # Przechowujemy dane do atrybutów
             self._calculated_burn_rate = round(daily_burn_rate, 2)
             self._yesterday_weight = yesterday_burn
             self._forecast_weight = forecast_rate
-
             return round(days_remaining, 1)
 
         except Exception as e:
@@ -1075,14 +1060,10 @@ class StokerRangeSensor(StokerEntity, SensorEntity):
     def extra_state_attributes(self):
         """Atrybuty pokazujące wagę składowych modelu."""
         val = self.native_value
-        attrs = {
-            "model_weight_real": "70%",
-            "model_weight_forecast": "30%",
-            "status": "Stabilny"
-        }
+        attrs = {}
         
         if hasattr(self, '_calculated_burn_rate'):
-            attrs["avg_daily_burn_calculated"] = f"{self._calculated_burn_rate} kg/d"
+            attrs["avg_daily_burn_calculated"] = f"{self._calculated_burn_rate} kg/24h"
             attrs["yesterday_actual"] = f"{self._yesterday_weight} kg"
             attrs["forecast_theoretical"] = f"{self._forecast_weight} kg"
 
