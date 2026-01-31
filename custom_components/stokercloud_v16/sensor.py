@@ -1,7 +1,7 @@
 from __future__ import annotations
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from .entity import StokerEntity
 from homeassistant.util import dt as dt_util
 from homeassistant.components.sensor import (
