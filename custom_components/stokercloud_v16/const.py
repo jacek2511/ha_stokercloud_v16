@@ -208,11 +208,12 @@ STOKER_SETTINGS_MENU_CONFIG = [
 ]
 
 WEATHER_ZONE_TRANSLATIONS = {
-    "temp": "Temperatura aktualna", 
-    "wanted": "Temperatura zadana", 
-    "return": "Temperatura powrotu", 
-    "external": "Temperatura zewnętrzna",
-    "active": "Status strefy"
+    "actual": "current_temp", 
+    "wanted": "wanted_temp", 
+    "calc": "avarage_flow_temp",
+    "actualref": "current_flow_temp",
+    "valve": "valve_position",
+    "active": "zone_active"
 }
 
 SIMPLE_NUMBERS_CONFIG = [
@@ -234,7 +235,7 @@ SENSOR_MAP: Final = [
         "status_raw": "miscdata.state.value"
     }),
     ("Temperatura kotła", "boiler_temp", "frontdata.boilertemp", UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, SensorStateClass.MEASUREMENT, "mdi:thermometer", {
-        "target": "boilerdata.2"
+        "target": "frontdata.-wantedboilertemp"
     }),
     ("Temperatura powrotu", "return_temperature", "boilerdata.17", UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, SensorStateClass.MEASUREMENT, "mdi:thermometer-minus", None),
     ("Temperatura spalin", "smoke_temperature", "frontdata.smoketemp", UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, SensorStateClass.MEASUREMENT, "mdi:fire-alert", None),
@@ -244,9 +245,11 @@ SENSOR_MAP: Final = [
         "dhw_hysteresis": "dhwdata.3"
     }),
     ("Konsumpcja dzienna", "consumption_today", "stats.day", UnitOfMass.KILOGRAMS, SensorDeviceClass.WEIGHT, SensorStateClass.TOTAL, "mdi:chart-bell-curve", None),
-    ("Pellet w zasobniku", "hopper_content", "frontdata.hoppercontent", UnitOfMass.KILOGRAMS, SensorDeviceClass.WEIGHT, SensorStateClass.MEASUREMENT, "mdi:tray-full", None),
+    ("Pellet w zasobniku", "hopper_content", "frontdata.hoppercontent", UnitOfMass.KILOGRAMS, SensorDeviceClass.WEIGHT, SensorStateClass.MEASUREMENT, "mdi:tray-full", {
+        "hopper_distance": "frontdata.hopperdistance"
+    }),
     ("Poziom tlenu", "oxygen_current", "boilerdata.12", PERCENTAGE, None, SensorStateClass.MEASUREMENT, "mdi:fire-circle", {
-        "oxygen_reference": "frontdata.oxyr"
+        "oxygen_reference": "frontdata.refoxygen"
     }),
     ("Ciśnienie zwrotne", "backpressure", "miscdata.backpressure", "Pa", None, SensorStateClass.MEASUREMENT, "mdi:gauge", None),
     ("Aktualna moc", "current_power", "boilerdata.5", UnitOfPower.KILO_WATT, SensorDeviceClass.POWER, SensorStateClass.MEASUREMENT, "mdi:flash", {

@@ -129,15 +129,31 @@ class StokerWeatherZoneSensor(StokerBaseBinary):
         return str(val) == "1"
 
     @property
-    def extra_state_attributes(self):
-        weather_comp = self._resolve_path("weathercomp")
-        if not isinstance(weather_comp, dict):
-            return {}
-
-        prefix = f"zone{self._zone}-"
-        # Mapujemy techniczne nazwy z API na czytelne nazwy z WEATHER_ZONE_TRANSLATIONS
-        return {
-            WEATHER_ZONE_TRANSLATIONS.get(k.replace(prefix, ""), k.replace(prefix, "")): 
-            (v.get("val") if isinstance(v, dict) else v)
-            for k, v in weather_comp.items() if k.startswith(prefix)
-        }
+class StokerWeatherZoneSensor(StokerBaseBinary):                                   
+    """Sensor aktywno..ci strefy pogodowej."""                                
+    def __init__(self, coordinator, username, zone):                   
+        super().__init__(coordinator, username, f"weather_zone_{zone}", f"Strefa Pogodowa {zone}")
+        self.entity_id = f"binary_sensor.nbe_weather_zone_{zone}"                                           
+        self._zone = zone                                                                         
+        self._attr_icon = "mdi:home-thermometer"                                                  
+                                                                                                  
+    @property                                                                                     
+    def is_on(self) -> bool:                                     
+        # Strefa jest aktywna, gdy warto.... wynosi 1                                           
+        val = self._resolve_path(f"weathercomp.zone{self._zone}active")                               
+        return str(val) == "1"                                                         
+                                                                            
+    @property                                                                           
+    def extra_state_attributes(self):                                                               
+        weather_comp = self._resolve_path("weathercomp")               
+        if not isinstance(weather_comp, dict):                  
+            return {}                                                                                               
+                                                        
+        prefix_dash = f"zone{self._zone}-"                    
+        prefix_plain = f"zone{self._zone}"                           
+                                                              
+        return {                                                                       
+            WEATHER_ZONE_TRANSLATIONS.get(k.replace(prefix_dash, "").replace(prefix_plain, ""), k): 
+            (v.get("val") if isinstance(v, dict) else v)                                 
+            for k, v in weather_comp.items() if k.startswith(prefix_plain)               
+        }                                                                               
