@@ -125,7 +125,7 @@ class StokerWeatherZoneSensor(StokerBaseBinary):
     @property                                                                                     
     def is_on(self) -> bool:                                     
         val = self._resolve_path(f"weathercomp.zone{self._zone}active")                               
-        return val in [1, "1", 1.0, True]                                                         
+        return str(val if val is not None else "0") == "1"                                                       
                                                                             
     @property                                                                           
     def extra_state_attributes(self):                                                               
