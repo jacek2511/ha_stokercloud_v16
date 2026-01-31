@@ -13,7 +13,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
     # Możesz przenieść tę listę do const.py jako SWITCHES_CONFIG, jeśli planujesz ich więcej
     SWITCHES_CONFIG = [
-        ("extra_building_logic", "Uwzględniaj biuro w spalaniu", "mdi:office-building-cog", True),
+        ("office_logic", "Uwzględniaj biuro w spalaniu", "mdi:office-building-cog", True),
     ]
 
     async_add_entities([

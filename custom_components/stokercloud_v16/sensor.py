@@ -49,19 +49,7 @@ from .const import (
     STOKER_SETTINGS_MENU_CONFIG
 )
 
-
 _LOGGER = logging.getLogger(__name__)
-
-# --- BASE CLASS ---
-class StokerBaseSensor(StokerEntity, SensorEntity):
-    """Baza specyficzna dla sensorów liczbowych."""
-    def __init__(self, coordinator, username, uid, name):
-        super().__init__(coordinator, username) # Wywołuje init z entity.py
-        self._uid = uid
-        self._attr_name = name
-        self._attr_unique_id = f"nbe_{username}_{uid}"
-        self.entity_id = f"sensor.nbe_{uid}"
-
 
 # --- BASE SENSOR ---
 class StokerSensor(StokerEntity, SensorEntity):
@@ -210,7 +198,7 @@ class StokerEfficiencySensor(StokerEntity, SensorEntity, RestoreEntity):
     def __init__(self, coordinator, username, name, uid, consumption_sid, target_temp_sid, attr_name=None, use_wind=False, *args, **kwargs):
         super().__init__(coordinator, username)
         self.entity_id = f"sensor.nbe_{uid}_efficiency"
-        self._attr_name = f"{name} Indeks efektywności"
+        self._attr_name = f"{name} - Indeks efektywności"
         self._attr_unique_id = f"nbe_{username}_{uid}_efficiency"
         self._attr_native_unit_of_measurement = "kg/°C/24h"
         self._attr_state_class = SensorStateClass.MEASUREMENT
@@ -373,7 +361,7 @@ class StokerEfficiencySensor(StokerEntity, SensorEntity, RestoreEntity):
                     self._diag_house_share = self._instant_kg_per_hour * (pred_house / total_pred)
                     self._diag_office_share = self._instant_kg_per_hour * (pred_office / total_pred)
 
-            elif self._uid == "extra":
+            elif self._uid == "office":
                 if is_office_reliable:
                     total_pred = pred_house + pred_office
                     # Biuro dostaje swoją proporcjonalną część
@@ -400,11 +388,11 @@ class StokerEfficiencySensor(StokerEntity, SensorEntity, RestoreEntity):
  
 
 # --- EFFICENCY DEVIATION SENSOR ---
-class StokerEfficiencyDeviationSensor(CoordinatorEntity, SensorEntity):
+class StokerEfficiencyDeviationSensor(StokerEntity, SensorEntity):
     """Porównuje realny indeks wydajności z zadanym współczynnikiem izolacji."""
 
     def __init__(self, coordinator, username):
-        super().__init__(coordinator)
+        super().__init__(coordinator, username)
         self._username = username
         self.entity_id = "sensor.nbe_insulation_deviation"
         self._attr_has_entity_name = True
@@ -451,13 +439,13 @@ class StokerEfficiencyDeviationSensor(CoordinatorEntity, SensorEntity):
 
 
 # --- UNIFIED FORECAST SENSOR ---
-class StokerUnifiedForecastSensor(CoordinatorEntity, SensorEntity):
+class StokerUnifiedForecastSensor(StokerEntity, SensorEntity):
     """
     Uniwersalny sensor prognozy (Dom/Biuro/CWU/Suma) w KG lub PLN.
     Integruje aktualne zużycie dobowe z prognozą zapotrzebowania na resztę dnia.
     """
     def __init__(self, coordinator, username, target="total", forecast_type="weight"):
-        super().__init__(coordinator)
+        super().__init__(coordinator, username)
         self._username = username
         self._target = target        
         self._type = forecast_type    
@@ -473,7 +461,7 @@ class StokerUnifiedForecastSensor(CoordinatorEntity, SensorEntity):
         # Konfiguracja tożsamości encji
         if self._type == "weight":
             self.entity_id = f"sensor.nbe_forecast_{target}_weight"
-            self._attr_name = f"Prognoza {name_prefix} (KG)"
+            self._attr_name = f"Prognoza - {name_prefix} (KG)"
             self._attr_native_unit_of_measurement = "kg"
             self._attr_device_class = SensorDeviceClass.WEIGHT
             self._attr_icon = "mdi:chart-line"
@@ -605,7 +593,7 @@ class StokerUnifiedForecastSensor(CoordinatorEntity, SensorEntity):
 
 
 # --- FORECAST SENSOR ---
-class StokerForecastSensor(CoordinatorEntity, SensorEntity):
+class StokerForecastSensor(StokerEntity, SensorEntity):
     """
     Sensor prognozy statycznej (obliczeniowej).
     Pozwala na symulację kosztów/zużycia na podstawie indeksów wydajności.
@@ -613,7 +601,7 @@ class StokerForecastSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, username, name, uid, efficiency_sid, target_temp_sid, 
                  is_fixed=False, force_index=False, force_slider=False, 
                  uid_for_slider=None, return_kg=False):
-        super().__init__(coordinator)
+        super().__init__(coordinator, username)
         self._username = username
         self._uid = uid
         self._uid_for_slider = uid_for_slider or uid 
@@ -769,14 +757,14 @@ class StokerForecastSensor(CoordinatorEntity, SensorEntity):
             return round(self._last_valid_forecast, 2)
 
 # --- TOTAL COST SENSOR ---
-class StokerCostTotalSensor(CoordinatorEntity, SensorEntity, RestoreEntity):
+class StokerCostTotalSensor(StokerEntity, SensorEntity, RestoreEntity):
     """
     Sensor akumulujący całkowity koszt (long-term statistics).
     Nalicza opłaty na podstawie przyrostu (delty) kilogramów i aktualnej ceny.
     """
 
     def __init__(self, coordinator, username, name, uid, consumption_sid):
-        super().__init__(coordinator)
+        super().__init__(coordinator, username)
         self._username = username
         self.entity_id = f"sensor.nbe_{uid}_cost_total"
         self._attr_name = f"Koszt całkowity - {name}"
@@ -859,11 +847,11 @@ class StokerCostTotalSensor(CoordinatorEntity, SensorEntity, RestoreEntity):
 
 
 # --- ACTUAL HEATING COST SENSOR ---
-class StokerHeatingCostActualSensor(CoordinatorEntity, SensorEntity):
+class StokerHeatingCostActualSensor(StokerEntity, SensorEntity):
     """Sensor wyliczający koszt aktualnego zużycia dobowego (chwilowy)."""
     
     def __init__(self, coordinator, username):
-        super().__init__(coordinator)
+        super().__init__(coordinator, username)
         self._username = username
         self.entity_id = "sensor.nbe_heating_cost_actual"
         self._attr_has_entity_name = True
@@ -892,15 +880,15 @@ class StokerHeatingCostActualSensor(CoordinatorEntity, SensorEntity):
 
 
 # --- HOUSE & OFFICE CONSUMPTION SENSOR ---
-class StokerDividedConsumptionSensor(CoordinatorEntity, SensorEntity, RestoreEntity):
+class StokerDividedConsumptionSensor(StokerEntity, SensorEntity, RestoreEntity):
     """Uniwersalny sensor rozdzielający zużycie między Dom a Biuro."""
     
     def __init__(self, coordinator, username, is_house=True):
-        super().__init__(coordinator)
+        super().__init__(coordinator, username)
         self._username = username
         self._is_house = is_house
         
-        suffix = "house" if is_house else "extra_building"
+        suffix = "house" if is_house else "office"
         self.entity_id = f"sensor.nbe_{suffix}_consumption_total"
         self._attr_name = "Dom - Konsumpcja całkowita" if is_house else "Biuro - Konsumpcja całkowita"
         self._attr_unique_id = f"nbe_{username}_{suffix}_consumption_total"
@@ -1036,16 +1024,16 @@ class StokerDividedConsumptionSensor(CoordinatorEntity, SensorEntity, RestoreEnt
 
 
 # --- PELLETS LEFT FOR DAYS SENSOR ---
-class StokerRangeSensor(CoordinatorEntity, SensorEntity):
+class StokerRangeSensor(StokerEntity, SensorEntity):
     """
     Sensor zasięgu. 
     Łączy aktualny stan zasobnika z dynamicznym modelem zapotrzebowania (Burn Rate).
     """
     def __init__(self, coordinator, username):
-        super().__init__(coordinator)
+        super().__init__(coordinator, username)
         self._username = username
         self.entity_id = "sensor.nbe_pellet_range"
-        self._attr_name = "NBE - Zasięg zasobnika"
+        self._attr_name = "Zasobnik - Zasięg"
         self._attr_unique_id = f"nbe_{username}_range_days"
         self._attr_native_unit_of_measurement = "dni"
         self._attr_icon = "mdi:calendar-clock"
@@ -1307,18 +1295,18 @@ async def async_setup_entry(hass, entry, async_add_entities):
         computed_entities = [
             # 1. Koszty rzeczywiste (PLN) bazujące na Twoich sensorach "Total"
             StokerCostTotalSensor(coordinator, username, "Dom", "house", "sensor.nbe_house_consumption_total"),
-            StokerCostTotalSensor(coordinator, username, "Biuro", "extra", "sensor.nbe_extra_building_consumption_total"),
+            StokerCostTotalSensor(coordinator, username, "Biuro", "office", "sensor.nbe_office_consumption_total"),
             StokerCostTotalSensor(coordinator, username, "CWU", "dhw", "sensor.nbe_dhw_consumption_total"),
             StokerHeatingCostActualSensor(coordinator, username),
 
             # 2. Indeksy efektywności i odchylenia
-            StokerEfficiencySensor(coordinator, username, "Dom", "house", "sensor.nbe_consumption_statistics", "number.nbe_comfort_temperature", "month", use_wind=True),
-            StokerEfficiencySensor(coordinator, username, "Biuro", "extra", "sensor.nbe_consumption_statistics", "number.nbe_extra_building_target_temp", "month", use_wind=True),
+            StokerEfficiencySensor(coordinator, username, "Dom", "house", "sensor.nbe_consumption_statistics", "number.nbe_house_targer_temp", "month", use_wind=True),
+            StokerEfficiencySensor(coordinator, username, "Biuro", "office", "sensor.nbe_consumption_statistics", "number.nbe_office_target_temp", "month", use_wind=True),
             StokerEfficiencyDeviationSensor(coordinator, username),
 
             # 3. Symulatory (PLN)
-            StokerForecastSensor(coordinator, username, "Dom (Symulacja)", "house_sim", None, "number.nbe_comfort_temperature", force_slider=True, uid_for_slider="house"),
-            StokerForecastSensor(coordinator, username, "Biuro (Symulacja)", "extra_sim", None, "number.nbe_extra_building_target_temp", force_slider=True, uid_for_slider="extra"),
+            StokerForecastSensor(coordinator, username, "Dom (Symulacja)", "house_sim", None, "number.nbe_house_target_temp", force_slider=True, uid_for_slider="house"),
+            StokerForecastSensor(coordinator, username, "Biuro (Symulacja)", "office_sim", None, "number.nbe_office_target_temp", force_slider=True, uid_for_slider="office"),
 
             # 4. Zasięg zasobnika
             StokerRangeSensor(coordinator, username),

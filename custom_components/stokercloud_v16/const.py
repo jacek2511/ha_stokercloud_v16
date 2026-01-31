@@ -19,10 +19,10 @@ ENTITY_WEATHER: Final = "sensor.nbe_weather_stokercloud"
 ENTITY_BOILER_STATUS: Final = "sensor.nbe_boiler_status"
 ENTITY_PUMP_HOUSE: Final = "binary_sensor.nbe_weather_pump_1"
 ENTITY_PUMP_OFFICE: Final = "binary_sensor.nbe_weather_pump_2"
-ENTITY_SWITCH_OFFICE: Final = "switch.nbe_extra_building_logic"
+ENTITY_SWITCH_OFFICE: Final = "switch.nbe_office_logic"
 ENTITY_OFFICE_TIME_SHIFT: Final = "number.nbe_office_time_shift"
-ENTITY_TEMP_TARGET_HOUSE: Final = "number.nbe_comfort_temperature"
-ENTITY_TEMP_TARGET_OFFICE: Final = "number.nbe_extra_building_target_temp"
+ENTITY_TEMP_TARGET_HOUSE: Final = "number.nbe_home_target_temp"
+ENTITY_TEMP_TARGET_OFFICE: Final = "number.nbe_office_target_temp"
 ENTITY_WIND_FACTOR: Final = "number.nbe_wind_factor"
 ENTITY_INSULATION_FACTOR_HOUSE: Final = "number.nbe_insulation_factor_house"
 ENTITY_DHW_TANK_VOLUME: Final = "number.nbe_dhw_tank_volume"
@@ -35,7 +35,7 @@ ENTITY_OFFICE_CONSUMPTION_DAILY: Final = "sensor.nbe_office_consumption_daily"
 
 # --- WEWNĘTRZNE ID SENSORÓW ---
 SENSOR_HOUSE_EFFICIENCY: Final = "sensor.nbe_house_efficiency"
-SENSOR_OFFICE_EFFICIENCY: Final = "sensor.nbe_extra_efficiency"
+SENSOR_OFFICE_EFFICIENCY: Final = "sensor.nbe_office_efficiency"
 SENSOR_HOPPER_CONTENT: Final = "sensor.nbe_hopper_content"
 SENSOR_DHW_TEMPERATURE: Final = "sensor.nbe_dhw_temperature"
 SENSOR_FORECAST_TOTAL_WEIGHT: Final = "sensor.nbe_forecast_total_weight"
@@ -218,15 +218,15 @@ WEATHER_ZONE_TRANSLATIONS = {
 
 SIMPLE_NUMBERS_CONFIG = [
     ("pellet_price", "Cena pelletu", 500, 4000, 10, "PLN/t", "mdi:cash", 1250, "auto"),
-    ("comfort_temperature", "Temperatura komfortu", 15, 28, 0.5, UnitOfTemperature.CELSIUS, "mdi:thermometer-lines", 22, "auto"),
-    ("extra_building_target_temp", "Temperatura Biura", 5, 25, 0.5, UnitOfTemperature.CELSIUS, "mdi:office-building-marker", 10, "auto"),
+    ("house_target_temp", "Temperatura zadana Domu", 15, 28, 0.5, UnitOfTemperature.CELSIUS, "mdi:thermometer-lines", 22, "auto"),
+    ("office_target_temp", "Temperatura Zadana Biura", 5, 25, 0.5, UnitOfTemperature.CELSIUS, "mdi:office-building-marker", 10, "auto"),
     ("wind_factor", "Współczynnik wiatru", 0, 20, 1, PERCENTAGE, "mdi:wind-power", 5, "slider"),
     ("dhw_tank_volume", "Pojemność bojlera", 50, 1000, 10, "l", "mdi:barrel", 200, "box"),
     ("system_efficiency", "Sprawność grzania CWU", 10, 100, 1, PERCENTAGE, "mdi:gauge", 85, "slider"),
     ("anomaly_threshold", "Anomalia wydajności", 5, 100, 5, PERCENTAGE, "mdi:alert-circle", 20, "slider"),
     ("office_time_shift", "Czas stabilizacji biura", 0, 60, 1, "min", "mdi:timer-sand", 10, "slider"),                              
     ("insulation_factor_house", "Charakterystyka strat - Dom", 0.05, 2, 0.01, "kg/°C/24h", "mdi:home-thermometer-outline", 0.6, "box"),                                    
-    ("insulation_factor_extra", "Charakterystyka strat - Biuro", 0.05, 2, 0.01, "kg/°C/24h", "mdi:home-thermometer-outline", 1.2, "box"),
+    ("insulation_factor_office", "Charakterystyka strat - Biuro", 0.05, 2, 0.01, "kg/°C/24h", "mdi:home-thermometer-outline", 1.2, "box"),
 ]
 
 SENSOR_MAP: Final = [
