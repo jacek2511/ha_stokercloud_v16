@@ -30,3 +30,10 @@ class StokerEntity(CoordinatorEntity):
             if not isinstance(val, dict): return default
             val = val.get(part)
         return val if val is not None else default
+
+    def _get_value_safely(self, entity_id, default=0.0):
+        state = self.hass.states.get(entity_id)
+        if state and state.state not in ["unknown", "unavailable", None]:
+            try: return float(state.state)
+            except ValueError: return default
+        return default

@@ -21,7 +21,18 @@ class StokerBaseNumber(StokerEntity, NumberEntity, RestoreEntity):
     
     def __init__(self, coordinator, username):
         super().__init__(coordinator, username)
-        self._attr_mode = NumberMode.BOX
+
+    @property
+    def native_value(self) -> float:
+        """Zwraca wartość i dba o estetykę (usuwa .0 przy liczbach całkowitych)."""
+        if self._attr_native_value is None:
+            return None
+        
+        # Jeśli krok jest liczbą całkowitą, wyświetlaj jako int (usuwa .0 w GUI)
+        if self._attr_native_step is not None and self._attr_native_step % 1 == 0:
+            return int(self._attr_native_value)
+            
+        return self._attr_native_value
 
     async def async_added_to_hass(self):
         """Przywracanie poprzedniej wartości po restarcie HA."""
@@ -29,7 +40,12 @@ class StokerBaseNumber(StokerEntity, NumberEntity, RestoreEntity):
         if (last_state := await self.async_get_last_state()) and \
            last_state.state not in (None, "unknown", "unavailable"):
             try:
-                self._attr_native_value = float(last_state.state)
+                val = float(last_state.state)
+                # Przywróć jako int, jeśli krok na to pozwala
+                if self._attr_native_step is not None and self._attr_native_step % 1 == 0:
+                    self._attr_native_value = int(val)
+                else:
+                    self._attr_native_value = val
             except ValueError:
                 _LOGGER.warning("Nie udało się przywrócić wartości dla %s", self.entity_id)
 
@@ -53,4 +69,4 @@ class StokerGenericNumber(StokerBaseNumber):
         self._attr_native_unit_of_measurement = unit
         self._attr_icon = icon
         self._attr_native_value = default
-        self._attr_mode = mode
+        self._attr_mode = getattr(NumberMode, mode.upper())

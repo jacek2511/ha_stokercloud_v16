@@ -475,13 +475,6 @@ class StokerUnifiedForecastSensor(StokerEntity, SensorEntity):
         self._attr_unique_id = f"nbe_{username}_forecast_{target}_{forecast_type}"
         self._attr_state_class = SensorStateClass.TOTAL
  
-    def _get_value_safely(self, entity_id, default=0.0):
-        state = self.hass.states.get(entity_id)
-        if state and state.state not in ["unknown", "unavailable", None]:
-            try: return float(state.state)
-            except ValueError: return default
-        return default
-
     def _get_attribute_safely(self, entity_id, attribute_name, default=0.0):
         state = self.hass.states.get(entity_id)
         if state and state.attributes:
@@ -1039,54 +1032,66 @@ class StokerRangeSensor(StokerEntity, SensorEntity):
         self._attr_icon = "mdi:calendar-clock"
         self._attr_state_class = SensorStateClass.MEASUREMENT
 
-    def _get_value_safely(self, entity_id, default=0.0):
-        """Pomocnik do bezpiecznego pobierania stanów innych sensorów."""
-        state = self.hass.states.get(entity_id)
-        if state and state.state not in ["unknown", "unavailable", None]:
-            try: 
-                return float(state.state)
-            except ValueError: 
-                return default
-        return default
-
-    @property
+@property
     def native_value(self):
-        """
-        Oblicza zasięg: Aktualna waga w kg / Prognozowane spalanie na dobę.
-        """
+        """Oblicza zasięg: 70% Realne spalanie (wczoraj) + 30% Prognoza."""
         try:
             data = self.coordinator.data or {}
+            current_pellet_kg = float(self._get_api_data("frontdata.hoppercontent", 0.0))
 
-            # 1. Ile kg pelletu jest teraz w zbiorniku?
-            current_pellet_kg = float(data.get("frontdata", {}).get("hoppercontent", 0.0))
+            # 1. Pobieramy spalanie z wczoraj (fakt)
+            yesterday_burn = float(self._get_api_data("stats.yesterday", 0.0))
 
-            # 2. Jakie jest prognozowane spalanie na dziś (Dom + Biuro + CWU)?
-            # Używamy sensora StokerTotalForecastSensor, który przygotowaliśmy wcześniej
-            forecast_daily_burn_rate = self._get_value_safely(SENSOR_FORECAST_TOTAL_WEIGHT, 0.0)
+            # 2. Pobieramy prognozę (teoria)
+            forecast_rate = self._get_value_safely(SENSOR_FORECAST_TOTAL_WEIGHT, 0.0)
 
-            # Zabezpieczenie przed dzieleniem przez zero i trybem letnim
-            # Jeśli spalanie jest śladowe (< 0.5kg/dobę), zakładamy "nieskończony" zasięg
-            if forecast_daily_burn_rate < 0.5:
+            # 3. Model hybrydowy z przewagą faktów (70/30)
+            if yesterday_burn > 0 and forecast_rate > 0:
+                daily_burn_rate = (yesterday_burn * 0.7) + (forecast_rate * 0.3)
+            elif yesterday_burn > 0:
+                daily_burn_rate = yesterday_burn
+            else:
+                daily_burn_rate = forecast_rate
+
+            # Zabezpieczenie przed dzieleniem przez zero
+            if daily_burn_rate < 0.5:
                 return 99.0
 
-            # Obliczamy pozostałe dni
-            days_remaining = current_pellet_kg / forecast_daily_burn_rate
+            days_remaining = current_pellet_kg / daily_burn_rate
+            
+            # Przechowujemy dane do atrybutów
+            self._calculated_burn_rate = round(daily_burn_rate, 2)
+            self._yesterday_weight = yesterday_burn
+            self._forecast_weight = forecast_rate
 
-            # Zwracamy wynik z dokładnością do 0.1 dnia (np. 4.5 dnia)
             return round(days_remaining, 1)
 
         except Exception as e:
-            _LOGGER.error("Błąd obliczania zasięgu: %s", e)
+            _LOGGER.error("Błąd obliczania zasięgu hybrydowego: %s", e)
             return None
 
     @property
     def extra_state_attributes(self):
-        """Dodatkowe info: kiedy spodziewane jest dosypywanie."""
+        """Atrybuty pokazujące wagę składowych modelu."""
         val = self.native_value
-        if val and val != 99.0:
-            return {"status": "Wymaga uwagi" if val < 2 else "Stabilny"}
-        return {"status": "Nieznany"}
+        attrs = {
+            "model_weight_real": "70%",
+            "model_weight_forecast": "30%",
+            "status": "Stabilny"
+        }
+        
+        if hasattr(self, '_calculated_burn_rate'):
+            attrs["avg_daily_burn_calculated"] = f"{self._calculated_burn_rate} kg/d"
+            attrs["yesterday_actual"] = f"{self._yesterday_weight} kg"
+            attrs["forecast_theoretical"] = f"{self._forecast_weight} kg"
 
+        if val and val != 99.0:
+            finish_date = dt_util.now() + timedelta(days=val)
+            attrs["expected_empty_date"] = finish_date.strftime("%Y-%m-%d %H:%M")
+            if val < 2:
+                attrs["status"] = "Uzupełnić pellet w zasobniku"
+        
+        return attrs
 
 # --- DHW TOTAL CONSUMPTION SENSOR ---
 class StokerDHWConsumptionTotalSensor(StokerEntity, SensorEntity, RestoreEntity):

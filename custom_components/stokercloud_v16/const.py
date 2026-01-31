@@ -225,8 +225,8 @@ SIMPLE_NUMBERS_CONFIG = [
     ("system_efficiency", "Sprawność grzania CWU", 10, 100, 1, PERCENTAGE, "mdi:gauge", 85, "slider"),
     ("anomaly_threshold", "Anomalia wydajności", 5, 100, 5, PERCENTAGE, "mdi:alert-circle", 20, "slider"),
     ("office_time_shift", "Czas stabilizacji biura", 0, 60, 1, "min", "mdi:timer-sand", 10, "slider"),                              
-    ("insulation_factor_house", "Charakterystyka strat - Dom", 0.05, 2, 0.01, "kg/°C/24h", "mdi:home-thermometer-outline", 0.6, "box"),                                    
-    ("insulation_factor_office", "Charakterystyka strat - Biuro", 0.05, 2, 0.01, "kg/°C/24h", "mdi:home-thermometer-outline", 1.2, "box"),
+    ("insulation_factor_house", "Charakterystyka strat - Dom", 0.05, 2, 0.01, "kg/°C/24h", "mdi:home-thermometer-outline", 0.6, "auto"),                                    
+    ("insulation_factor_office", "Charakterystyka strat - Biuro", 0.05, 2, 0.01, "kg/°C/24h", "mdi:home-thermometer-outline", 1.2, "auto"),
 ]
 
 SENSOR_MAP: Final = [
