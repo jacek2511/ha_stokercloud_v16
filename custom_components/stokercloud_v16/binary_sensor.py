@@ -114,21 +114,6 @@ class StokerOutputBinarySensor(StokerBaseBinary):
         data = self._resolve_path(f"leftoutput.{self._output_id}")
         return data if isinstance(data, dict) else {}
 
-class StokerWeatherZoneSensor(StokerBaseBinary):
-    """Sensor aktywności strefy pogodowej."""
-    def __init__(self, coordinator, username, zone):
-        super().__init__(coordinator, username, f"weather_zone_{zone}", f"Strefa Pogodowa {zone}")
-        self.entity_id = f"binary_sensor.nbe_weather_zone_{zone}"
-        self._zone = zone
-        self._attr_icon = "mdi:home-thermometer"
-
-    @property
-    def is_on(self) -> bool:
-        # Strefa jest aktywna, gdy wartość wynosi 1
-        val = self._resolve_path(f"weathercomp.zone{self._zone}active")
-        return str(val) == "1"
-
-    @property
 class StokerWeatherZoneSensor(StokerBaseBinary):                                   
     """Sensor aktywno..ci strefy pogodowej."""                                
     def __init__(self, coordinator, username, zone):                   
@@ -139,9 +124,8 @@ class StokerWeatherZoneSensor(StokerBaseBinary):
                                                                                                   
     @property                                                                                     
     def is_on(self) -> bool:                                     
-        # Strefa jest aktywna, gdy warto.... wynosi 1                                           
         val = self._resolve_path(f"weathercomp.zone{self._zone}active")                               
-        return str(val) == "1"                                                         
+        return val in [1, "1", 1.0, True]                                                         
                                                                             
     @property                                                                           
     def extra_state_attributes(self):                                                               
