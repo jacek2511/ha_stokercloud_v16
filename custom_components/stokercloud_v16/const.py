@@ -208,10 +208,10 @@ STOKER_SETTINGS_MENU_CONFIG = [
 ]
 
 WEATHER_ZONE_TRANSLATIONS = {
-    "actual": "current_temp", 
-    "wanted": "wanted_temp", 
-    "calc": "avarage_flow_temp",
-    "actualref": "current_flow_temp",
+    "actual": "current_flow_temp", 
+    "wanted": "wanted_flow_temp", 
+    "calc": "avarage_temp",
+    "actualref": "current_temp",
     "valve": "valve_position",
     "active": "zone_active"
 }
