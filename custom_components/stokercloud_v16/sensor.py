@@ -3,6 +3,7 @@ import logging
 import time
 from datetime import datetime
 from .entity import StokerEntity
+from homeassistant.util import dt as dt_util
 from homeassistant.components.sensor import (
     SensorEntity,
     SensorDeviceClass,
