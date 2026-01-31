@@ -1032,7 +1032,7 @@ class StokerRangeSensor(StokerEntity, SensorEntity):
         self._attr_icon = "mdi:calendar-clock"
         self._attr_state_class = SensorStateClass.MEASUREMENT
 
-@property
+    @property
     def native_value(self):
         """Oblicza zasięg: 70% Realne spalanie (wczoraj) + 30% Prognoza."""
         try:
