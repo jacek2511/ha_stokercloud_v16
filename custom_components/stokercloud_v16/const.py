@@ -247,8 +247,8 @@ SENSOR_MAP: Final = [
         "dhw_low_temperature": "dhwdata.8",
         "dhw_hysteresis": "dhwdata.3"
     }),
-    ("Temperatura domu", "house_temperature", "weathercomp.zone1-actualref", UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, SensorStateClass.MEASUREMENT, "mdi:thermometer", None),
-    ("Temperatura biura", "office_temperature", "weathercomp.zone2-actualref", UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, SensorStateClass.MEASUREMENT, "mdi:thermometer", None),
+    ("Temperatura domu", "house_temperature", "weathercomp.zone1-actualref.val", UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, SensorStateClass.MEASUREMENT, "mdi:thermometer", None),
+    ("Temperatura biura", "office_temperature", "weathercomp.zone2-actualref.val", UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, SensorStateClass.MEASUREMENT, "mdi:thermometer", None),
     ("Konsumpcja dzienna", "consumption_today", "stats.day", UnitOfMass.KILOGRAMS, SensorDeviceClass.WEIGHT, SensorStateClass.TOTAL, "mdi:chart-bell-curve", None),
     ("Pellet w zasobniku", "hopper_content", "frontdata.hoppercontent", UnitOfMass.KILOGRAMS, SensorDeviceClass.WEIGHT, SensorStateClass.MEASUREMENT, "mdi:tray-full", {
         "hopper_distance": "frontdata.hopperdistance"
