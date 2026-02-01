@@ -21,8 +21,8 @@ ENTITY_PUMP_HOUSE: Final = "binary_sensor.nbe_weather_pump_1"
 ENTITY_PUMP_OFFICE: Final = "binary_sensor.nbe_weather_pump_2"
 ENTITY_SWITCH_OFFICE: Final = "switch.nbe_office_logic"
 ENTITY_OFFICE_TIME_SHIFT: Final = "number.nbe_office_time_shift"
-ENTITY_TEMP_TARGET_HOUSE: Final = "number.nbe_home_target_temp"
-ENTITY_TEMP_TARGET_OFFICE: Final = "number.nbe_office_target_temp"
+ENTITY_TARGET_HOUSE_TEMP: Final = "number.nbe_house_target_temp"
+ENTITY_TARGET_OFFICE_TEMP: Final = "number.nbe_office_target_temp"
 ENTITY_WIND_FACTOR: Final = "number.nbe_wind_factor"
 ENTITY_INSULATION_FACTOR_HOUSE: Final = "number.nbe_insulation_factor_house"
 ENTITY_DHW_TANK_VOLUME: Final = "number.nbe_dhw_tank_volume"
@@ -204,7 +204,10 @@ STOKER_SETTINGS_MENU_CONFIG = [
     ("Ustawienia Tlenu", "oxygen", "mdi:fire"),
     ("Ustawienia Czyszczenia", "cleaning", "mdi:broom"),
     ("Ustawienia Zasobnika", "hopper", "mdi:tray-full"),
-    ("Ustawienia Pogodowe", "weather", "mdi:weather-partly-cloudy"),
+    ("Ustawienia Pogodowe_1", "weather", "mdi:weather-partly-cloudy"),
+    ("Ustawienia Pogodowe_2", "weather2", "mdi:weather-partly-cloudy"),
+    ("Ustawienia Pogodowe_3", "weather3", "mdi:weather-partly-cloudy"),
+    ("Ustawienia Pogodowe_4", "weather4", "mdi:weather-partly-cloudy")
 ]
 
 WEATHER_ZONE_TRANSLATIONS = {

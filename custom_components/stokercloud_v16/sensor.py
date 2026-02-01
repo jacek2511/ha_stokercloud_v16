@@ -23,8 +23,8 @@ from homeassistant.components.sensor import ENTITY_ID_FORMAT
 from .const import (
     DOMAIN,
     ENTITY_SWITCH_OFFICE,
-    ENTITY_TEMP_TARGET_HOUSE,
-    ENTITY_TEMP_TARGET_OFFICE,
+    ENTITY_TARGET_HOUSE_TEMP,
+    ENTITY_TARGET_OFFICE_TEMP,
     ENTITY_OFFICE_TIME_SHIFT,
     ENTITY_PELLET_PRICE,
     ENTITY_PUMP_HOUSE,
@@ -484,6 +484,96 @@ class StokerUnifiedForecastSensor(StokerEntity, SensorEntity):
                 except ValueError: return default
         return default
 
+    async def async_added_to_hass(self):
+        """Rejestracja nasłuchiwania na zmiany encji zewnętrznych."""
+        await super().async_added_to_hass()
+        
+        # Lista encji, których zmiana ma wymusić przeliczenie prognozy
+        tracked_entities = [
+            ENTITY_TARGET_HOUSE_TEMP,
+            ENTITY_TARGET_OFFICE_TEMP,
+            ENTITY_WIND_FACTOR,
+            ENTITY_PELLET_PRICE
+        ]
+        
+        existing_entities = [
+            e for e in tracked_entities if self.hass.states.get(e) is not None
+        ]
+
+        if existing_entities:
+            self.async_on_remove(
+                async_track_state_change_event(
+                    self.hass, existing_entities, self._update_manual
+                )
+            )
+
+    def _update_manual(self, event):
+        """Wymuszenie odświeżenia przy zmianie temperatury zadanej."""
+        self.async_write_ha_state()
+ 
+    def _get_schedule_activity(self, zone_index):
+        
+        # Inicjalizacja zmiennych diagnostycznych
+        self._debug_enabled = False
+        self._debug_loaded = False
+
+        now = datetime.now()
+        current_hour = now.hour
+        weekday = now.weekday()
+        hours_left_today = max(0, 1440 - (now.hour * 60 + now.minute)) / 60.0
+
+        menu_key = "weather" if zone_index == 0 else f"weather{zone_index + 1}"
+        
+        menus = self.coordinator.data.get("menus", {})
+        zone_menu = menus.get(menu_key, {})
+
+        if not zone_menu:
+            return hours_left_today
+
+        timer_val = "0"
+        timings_dict = {}
+
+        for key, item in zone_menu.items():
+            if key.endswith(".enabletimer"):
+                timer_val = item.get("val", "0")
+            
+            elif key.endswith(".timings"):
+                timings_dict = item.get("val", {})
+
+        self._debug_enabled = str(timer_val) == "1"
+        self._debug_loaded = isinstance(timings_dict, dict) and len(timings_dict) > 0
+
+        if not self._debug_enabled or not self._debug_loaded:
+            return hours_left_today
+
+        all_keys = []
+        for char in "abcdefghij":
+            for num in range(20, 30):
+                all_keys.append(f"{char}{num}")
+
+        start_idx = zone_index * 24
+        zone_keys = all_keys[start_idx : start_idx + 24]
+        
+        remaining_units = 0.0
+        
+        for h in range(current_hour, 24):
+            if h >= len(zone_keys): break
+            
+            key = zone_keys[h]
+            val = timings_dict.get(key)
+            
+            if val is not None:
+                try:
+                    bits = (int(val) >> (weekday * 2)) & 3
+                    if bits == 0:
+                        remaining_units += 1.0
+                    elif bits == 2:
+                        remaining_units += 0.8
+                except (ValueError, TypeError):
+                    remaining_units += 1.0
+                    
+        return round(remaining_units, 2)
+
     @property
     def native_value(self):
         try:
@@ -511,33 +601,30 @@ class StokerUnifiedForecastSensor(StokerEntity, SensorEntity):
             eff_energy_kg = PELLET_CALORIFIC_KWH * BOILER_EFFICIENCY_DHW
 
             # --- 3. DOM (HOUSE) ---
-            target_house_temp = self._get_value_safely(ENTITY_TEMP_TARGET_HOUSE, 23.0)
+            target_house_temp = self._get_value_safely(ENTITY_TARGET_HOUSE_TEMP, 23.0)
             delta_house_temp = max(0, (target_house_temp - ext_temp) * wind_factor   )
-            
             idx_house_eff = self._get_value_safely(SENSOR_HOUSE_EFFICIENCY, 0.8)
             consumed_house = self._get_value_safely(ENTITY_HOUSE_CONSUMPTION_DAILY, 0.0)
-            
-            # Prognoza Domu = To co już spalił + (indeks * delta_house_temp / 24h) * pozostały czas
-            predicted_rem_house = (idx_house_eff * delta_house_temp / 24.0) * hours_left_today
-            forecast_house_total = consumed_house + predicted_rem_house
+            self._house_units = self._get_schedule_activity(0)
+            forecast_house_total = consumed_house + (idx_house_eff * delta_house_temp / 24.0) * self._house_units 
 
             # --- 4. BIURO (OFFICE) ---
             sw_office = self.hass.states.get(ENTITY_SWITCH_OFFICE)
             is_office_on = sw_office and sw_office.state == "on"
+            forecast_office_total = 0.0
             
-            target_office_temp = self._get_value_safely(ENTITY_TEMP_TARGET_OFFICE, 18.0)
-            delta_office_temp = max(0, (target_office_temp - ext_temp) * wind_factor)
-            
-            idx_office_eff = self._get_value_safely(SENSOR_OFFICE_EFFICIENCY, 0.6)
-            consumed_office = self._get_value_safely(ENTITY_OFFICE_CONSUMPTION_DAILY, 0.0)
-            
-            predicted_rem_office = 0.0
             if is_office_on:
-                predicted_rem_office = (idx_office_eff * delta_office_temp / 24.0) * hours_left_today
-            
-            forecast_office_total = consumed_office + predicted_rem_office
+                target_office_temp = self._get_value_safely(ENTITY_TARGET_OFFICE_TEMP, 10.0)
+                delta_office_temp = max(0, (target_office_temp - ext_temp) * wind_factor)
+                idx_office_eff = self._get_value_safely(SENSOR_OFFICE_EFFICIENCY, 1.2)
+                consumed_office = self._get_value_safely(ENTITY_OFFICE_CONSUMPTION_DAILY, 0.0)
+                self._office_units = self._get_schedule_activity(1)  
+                forecast_office_total = consumed_office + (idx_office_eff * delta_office_temp / 24.0) * self._office_units
+            else:
+                self._office_units = 0.0
 
             # --- 5. CWU (DHW) ---
+            self._dhw_units = 0.0
             data = self.coordinator.data or {}
             
             consumed_dhw = float(data.get("stats", {}).get("dhw_day", 0.0))
@@ -564,6 +651,8 @@ class StokerUnifiedForecastSensor(StokerEntity, SensorEntity):
             forecast_dhw_total = consumed_dhw + needed_dhw_now_kg + standby_loss_kg
 
             # --- 6. AGREGACJA WYNIKU ---
+            self._total_units = 0.0
+
             if self._target == "house":
                 res_kg = forecast_house_total
             elif self._target == "office":
@@ -583,6 +672,21 @@ class StokerUnifiedForecastSensor(StokerEntity, SensorEntity):
         except Exception as e:
             _LOGGER.error("Błąd prognozy Unified Forecast (%s): %s", self._target, e)
             return 0.0
+
+    @property
+    def extra_state_attributes(self):
+        units = getattr(self, f"_{self._target}_units", 0.0)
+        
+        if self._target == "dhw" or self._target == "total":
+            display_units = "N/A"
+        else:
+            display_units = str(timedelta(hours=units))[:-3]
+
+        return {
+            "schedule_enabled": getattr(self, "_debug_enabled", False),
+            "schedule_data_loaded": getattr(self, "_debug_loaded", False),
+            "calculated_remaining_time": display_units
+        }
 
 
 # --- FORECAST SENSOR ---
@@ -916,7 +1020,7 @@ class StokerDividedConsumptionSensor(StokerEntity, SensorEntity, RestoreEntity):
             idx = float(eff_state.state) if eff_state and eff_state.state not in ("unknown", "unavailable") else 0.8
         except: idx = 0.8
 
-        t_state = self.hass.states.get(ENTITY_TEMP_TARGET_HOUSE)
+        t_state = self.hass.states.get(ENTITY_TARGET_HOUSE_TEMP)
         try:
             t_target = float(t_state.state) if t_state and t_state.state not in ("unknown", "unavailable") else 22.0
         except: t_target = 22.0
@@ -1157,7 +1261,6 @@ class StokerDHWConsumptionTotalSensor(StokerEntity, SensorEntity, RestoreEntity)
                     "Zignorowano podejrzany przyrost CWU (%s kg). Sprawdź stabilność API.", 
                     delta_dhw
                 )
-
 
 # --- OUTPUTS SENSOR ---
 class StokerOutputSensor(StokerEntity, SensorEntity):
