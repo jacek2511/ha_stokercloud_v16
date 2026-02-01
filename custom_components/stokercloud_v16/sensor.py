@@ -1077,10 +1077,8 @@ class StokerRangeSensor(StokerEntity, SensorEntity):
 
 # --- DHW TOTAL CONSUMPTION SENSOR ---
 class StokerDHWConsumptionTotalSensor(StokerEntity, SensorEntity, RestoreEntity):
-    """
-    Sensor kumulatywny zużycia pelletu na CWU.
-    Działa jako licznik długoterminowy, odporny na reszty dobowe sterownika.
-    """
+    """ Sensor kumulatywny zużycia pelletu na CWU. """
+
     def __init__(self, coordinator, username):
         super().__init__(coordinator, username)
         self.entity_id = "sensor.nbe_dhw_consumption_total"
@@ -1094,50 +1092,71 @@ class StokerDHWConsumptionTotalSensor(StokerEntity, SensorEntity, RestoreEntity)
         
         self._attr_native_value = 0.0
         self._last_dhw_stat = 0.0
+        self._initialized = False
 
     async def async_added_to_hass(self):
-        """Przywracanie stanu licznika po restarcie HA."""
+        """Przywracanie stanu licznika i inicjalizacja punktu odniesienia."""
         await super().async_added_to_hass()
-        last_state = await self.async_get_last_state()
         
+        last_state = await self.async_get_last_state()
         if last_state is not None and last_state.state not in ["unknown", "unavailable"]:
             try:
                 self._attr_native_value = float(last_state.state)
             except ValueError:
                 self._attr_native_value = 0.0
-        
-        # Inicjalizacja punktu odniesienia z koordynatora
-        data = self.coordinator.data
-        if data and "stats" in data:
-            self._last_dhw_stat = float(data["stats"].get("dhw_day", 0.0))
-        
+
+        current_stat = self._get_api_data("stats.dhw_day")
+        if current_stat is not None:
+            self._last_dhw_stat = float(current_stat)
+            self._initialized = True
+            _LOGGER.debug("Zainicjalizowano sensor CWU Total. Startowa baza: %s kg", self._last_dhw_stat)
+
         self.async_write_ha_state()
 
     def _handle_coordinator_update(self) -> None:
-        """Obliczanie przyrostów na podstawie statystyk dobowych CWU."""
-        data = self.coordinator.data
-        if not data or "stats" not in data:
+        raw_current = self._get_api_data("stats.dhw_day")
+        
+        if raw_current is None:
+            return
+            
+        current_dhw_stat = float(raw_current)
+        
+        # Jeśli sensor nie zdążył się zainicjalizować w async_added_to_hass
+        if not self._initialized:
+            self._last_dhw_stat = current_dhw_stat
+            self._initialized = True
             return
 
-        # Pobieramy dzisiejsze spalanie na CWU podawane przez sterownik
-        current_dhw_stat = float(data["stats"].get("dhw_day", 0.0))
+        delta_dhw = 0.0
         
-        # Logika obsługi przyrostu i resetu o północy
+        # 1. Wykrycie resetu (północ: np. przejście z 1.6 na 0.0)
         if current_dhw_stat < self._last_dhw_stat:
-            # Nastąpił reset dobowy - cały obecny stan to nasz nowy przyrost
-            delta_dhw = current_dhw_stat
-        else:
-            # Standardowy przyrost w ciągu dnia
-            delta_dhw = current_dhw_stat - self._last_dhw_stat
+            delta_dhw = 0.0 
         
-        # Aktualizacja punktu odniesienia
+        # 2. Wykrycie "skoku z zera" tuż po północy (np. z 0.0 na 0.1)
+        elif self._last_dhw_stat == 0.0 and current_dhw_stat > 0:
+            _LOGGER.debug("Pierwszy odczyt po północy (%s kg). Ustawiam nową bazę.", current_dhw_stat)
+            delta_dhw = 0.0
+            
+        # 3. Standardowy przyrost w ciągu dnia
+        else:
+            delta_dhw = current_dhw_stat - self._last_dhw_stat
+
+        # Aktualizacja bazy dla następnego cyklu
         self._last_dhw_stat = current_dhw_stat
         
-        # Jeśli kocioł faktycznie coś spalił na wodę, dodajemy do licznika głównego
+        # 4. Zapis tylko realnych i sensownych przyrostów
         if delta_dhw > 0:
-            self._attr_native_value = round((self._attr_native_value or 0.0) + delta_dhw, 4)
-            # Wymuszamy zapis stanu
-            self.async_write_ha_state()
+            # Sanity check: ignoruj skoki powyżej 2kg w jednym cyklu API (np. błąd danych)
+            if delta_dhw < 2.0:
+                current_total = self._attr_native_value or 0.0
+                self._attr_native_value = round(current_total + delta_dhw, 4)
+                self.async_write_ha_state()
+            else:
+                _LOGGER.debug(
+                    "Zignorowano podejrzany przyrost CWU (%s kg). Sprawdź stabilność API.", 
+                    delta_dhw
+                )
 
 
 # --- OUTPUTS SENSOR ---
