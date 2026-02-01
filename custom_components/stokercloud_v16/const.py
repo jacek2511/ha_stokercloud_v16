@@ -77,7 +77,7 @@ STOKER_STATES: Final = {
     "state_39": "POPILENIK NIE PODŁĄCZONY",
     "state_41": "ALARM-ZASOBNIK PELLETU",
     "state_42": "BŁĄD SONDY LAMBDA",
-    "state_43": "CZYSZCZENIE KOMPRESOREM",
+    "state_43": "CZYSZCZENIE",
     "state_44": "USZKODZENIE ZAPALARKI",
     "state_45": "BŁĄD CZUJNIKA ZASOBNIKA",
     "state_46": "ZATRZYMANIE-PUSTY ZASOBNIK",

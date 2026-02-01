@@ -33,17 +33,6 @@ class StokerBaseBinary(StokerEntity, BinarySensorEntity): # Dziedziczymy po Stok
         self._attr_unique_id = f"nbe_{username}_{uid}"
         # device_info jest już w StokerEntity, więc tutaj go nie powielamy
 
-    def _resolve_path(self, path: str | list):
-        """Ujednolicona metoda dostępu do danych (identyczna jak w sensor.py)."""
-        val = self.coordinator.data
-        parts = path.split(".") if isinstance(path, str) else path
-        for p in parts:
-            if isinstance(val, dict):
-                val = val.get(p)
-            else:
-                return None
-        return val
-
 class StokerBinarySensor(StokerBaseBinary):
     def __init__(self, coordinator, username, uid, name, path, device_class):
         super().__init__(coordinator, username, uid, name)

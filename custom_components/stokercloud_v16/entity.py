@@ -37,3 +37,14 @@ class StokerEntity(CoordinatorEntity):
             try: return float(state.state)
             except ValueError: return default
         return default
+
+    def _resolve_path(self, path: str | list):
+        """Ujednolicona metoda dostępu do danych (identyczna jak w sensor.py)."""
+        val = self.coordinator.data
+        parts = path.split(".") if isinstance(path, str) else path
+        for p in parts:
+            if isinstance(val, dict):
+                val = val.get(p)
+            else:
+                return None
+        return val

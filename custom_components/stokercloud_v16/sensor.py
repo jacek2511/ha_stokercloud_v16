@@ -67,18 +67,6 @@ class StokerSensor(StokerEntity, SensorEntity):
         self._attr_icon = icon
         self._attrs_map = attrs or {}
 
-    def _resolve_path(self, path):
-        """Pomocnik do wyciągania danych ze słownika po ścieżce 'klucz.podklucz'."""
-        val = self.coordinator.data
-        if not val:
-            return None
-        for key in path.split('.'):
-            if isinstance(val, dict):
-                val = val.get(key)
-            else:
-                return None
-        return val
-
     @property
     def native_value(self):
         val = self._resolve_path(self._path)
