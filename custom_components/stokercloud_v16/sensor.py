@@ -1041,21 +1041,32 @@ class StokerDividedConsumptionSensor(StokerEntity, SensorEntity, RestoreEntity):
         except (ValueError, TypeError):
             return
 
-        # 1. OBSŁUGA RESETU O PÓŁNOCY (Z Twojej starej klasy)
-        if current_day_stat < self._last_day_stat:
-            _LOGGER.debug("Wykryto reset licznika dobowego o północy.")
-            self._last_day_stat = current_day_stat
-            self._last_update_time = time.time()
-            self._last_increment = 0.0
-            return  # KLUCZOWE: Wychodzimy, żeby nie naliczyć błędu
-
-        # 2. Obliczanie delty
-        total_delta = current_day_stat - self._last_day_stat
-        
-        # Jeśli brak przyrostu, aktualizujemy tylko czas i wychodzimy
-        if total_delta <= 0:
-            self._last_update_time = time.time()
-            return
+        # 1. OBSŁUGA RESETU O PÓŁNOCY
+        if current_day_stat < self._last_day_stat:                                                                              
+            now_hour = datetime.now().hour                                                                                      
+            if now_hour == 0 or now_hour == 23:                                                                                 
+                _LOGGER.info("Poprawny reset nocny: %s", current_day_stat)                                                      
+                self._last_day_stat = current_day_stat                                                                          
+                self._last_update_time = time.time()                                                                            
+                return                                                                                                          
+            else:                                                                                                               
+                # Ignorujemy spadek do zera w ..rodku dnia (b....d API)                                                         
+                _LOGGER.warning("Zignorowano b....d API (spadek licznika): %s -> %s", self._last_day_stat, current_day_stat)    
+                return                                                                                                          
+                                                                                                                                
+        # 2. Obliczanie delty                                                                                                   
+        total_delta = current_day_stat - self._last_day_stat                                                                    
+                                                                                                                                
+        # Je..li brak przyrostu, aktualizujemy tylko czas i wychodzimy                                                          
+        if total_delta <= 0:                                                                                                    
+            self._last_update_time = time.time()                                                                                
+            return                                                                                                              
+                                                                                                                                
+        if total_delta > 2.0:                                                                                                   
+            _LOGGER.error("Zablokowano nienaturalny skok zu..ycia: %s kg! (B....d danych)", total_delta)                        
+            # Synchronizujemy licznik, by w nast..pnym kroku delta by..a ju.. poprawna                                          
+            self._last_day_stat = current_day_stat                                                                              
+            return                                                                                                              
 
         now_ts = time.time()
         time_diff_hours = (now_ts - self._last_update_time) / 3600.0
