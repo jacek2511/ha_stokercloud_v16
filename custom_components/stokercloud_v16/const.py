@@ -240,13 +240,15 @@ SENSOR_MAP: Final = [
     ("Temperatura kotła", "boiler_temp", "frontdata.boilertemp", UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, SensorStateClass.MEASUREMENT, "mdi:thermometer", {
         "target": "frontdata.-wantedboilertemp"
     }),
-    ("Temperatura powrotu", "return_temperature", "boilerdata.17", UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, SensorStateClass.MEASUREMENT, "mdi:thermometer-minus", None),
+    ("Temperatura powrotu", "return_temperature", "boilerdata.17", UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, SensorStateClass.MEASUREMENT, "mdi:thermometer", None),
     ("Temperatura spalin", "smoke_temperature", "frontdata.smoketemp", UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, SensorStateClass.MEASUREMENT, "mdi:fire-alert", None),
     ("Temperatura CWU", "dhw_temperature", "frontdata.dhw", UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, SensorStateClass.MEASUREMENT, "mdi:water-boiler", {
         "dhw_temperature_requested": "frontdata.dhwwanted",
         "dhw_low_temperature": "dhwdata.8",
         "dhw_hysteresis": "dhwdata.3"
     }),
+    ("Temperatura domu", "house_temperature", "weathercomp.zone1-actualref", UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, SensorStateClass.MEASUREMENT, "mdi:thermometer", None),
+    ("Temperatura biura", "office_temperature", "weathercomp.zone2-actualref", UnitOfTemperature.CELSIUS, SensorDeviceClass.TEMPERATURE, SensorStateClass.MEASUREMENT, "mdi:thermometer", None),
     ("Konsumpcja dzienna", "consumption_today", "stats.day", UnitOfMass.KILOGRAMS, SensorDeviceClass.WEIGHT, SensorStateClass.TOTAL, "mdi:chart-bell-curve", None),
     ("Pellet w zasobniku", "hopper_content", "frontdata.hoppercontent", UnitOfMass.KILOGRAMS, SensorDeviceClass.WEIGHT, SensorStateClass.MEASUREMENT, "mdi:tray-full", {
         "hopper_distance": "frontdata.hopperdistance"
