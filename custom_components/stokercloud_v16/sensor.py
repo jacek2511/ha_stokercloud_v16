@@ -204,7 +204,7 @@ class StokerEfficiencySensor(StokerEntity, SensorEntity, RestoreEntity):
         self._office_start_timestamp = None
         self._office_last_pump_on_time = None 
 
-        self._alpha = 0.1  
+        self._alpha = 0.05
         self._instant_kg_per_hour = 0.0
         self._diag_house_share = 0.0
         self._diag_office_share = 0.0
@@ -333,35 +333,54 @@ class StokerEfficiencySensor(StokerEntity, SensorEntity, RestoreEntity):
             is_office_active = (switch_is_on and pump_is_on)
             elapsed = (now - self._office_start_timestamp) / 60 if self._office_start_timestamp else 0
             is_office_reliable = is_office_active and elapsed >= self._dynamic_limit_cache
+            is_office_warming_up = is_office_active and elapsed < self._dynamic_limit_cache
             
+            active_pred_office = pred_office if is_office_active else 0.0                             
+            total_pred = pred_house + active_pred_office   
+
             new_instant_eff = self._current_efficiency
             do_math_update = False
 
-            if self._uid == "house":
-                if not is_office_reliable:
-                    self._diag_house_share = self._instant_kg_per_hour
-                    self._diag_office_share = pred_office
-                    new_instant_eff = (self._instant_kg_per_hour * 24.0) / effective_delta
-                    do_math_update = True
-                else:
-                    # PROPORCJA: Jeśli obie strefy grzeją, dzielimy spalanie wg potrzeb
-                    total_pred = pred_house + pred_office
-                    self._diag_house_share = self._instant_kg_per_hour * (pred_house / total_pred)
-                    self._diag_office_share = self._instant_kg_per_hour * (pred_office / total_pred)
+            if self._uid == "house":                                                                  
+                if is_office_warming_up:                                                              
+                    # Biuro zabiera paliwo, ale nie ufamy jeszcze danym do nauki indeksu                                        
+                    self._diag_house_share = self._instant_kg_per_hour * (pred_house / total_pred)                              
+                    self._diag_office_share = self._instant_kg_per_hour * (active_pred_office / total_pred)
+                    do_math_update = False                                                                 
+                elif not is_office_active:                                                                 
+                    # Tylko dom grzeje - dom uczy si.. na 100% spalania                                    
+                    self._diag_house_share = self._instant_kg_per_hour                                     
+                    self._diag_office_share = 0.0                                                          
+                    new_instant_eff = (self._instant_kg_per_hour * 24.0) / effective_delta                 
+                    do_math_update = True                                                                  
+                else:                                                                                      
+                    # Obie strefy stabilne - dom uczy si.. na swojej cz....ci proporcjonalnej                                   
+                    share_ratio = pred_house / total_pred                                                  
+                    self._diag_house_share = self._instant_kg_per_hour * share_ratio                       
+                    self._diag_office_share = self._instant_kg_per_hour * (1 - share_ratio)                
+                    new_instant_eff = (self._diag_house_share * 24.0) / effective_delta                    
+                    do_math_update = True                                                                              
 
-            elif self._uid == "office":
-                if is_office_reliable:
-                    total_pred = pred_house + pred_office
-                    # Biuro dostaje swoją proporcjonalną część
-                    office_kg_h = self._instant_kg_per_hour * (pred_office / total_pred)
-                    self._diag_office_share = office_kg_h
-                    self._diag_house_share = self._instant_kg_per_hour - office_kg_h
-                    
-                    new_instant_eff = (office_kg_h * 24.0) / effective_delta
-                    do_math_update = True
-                else:
-                    self._diag_office_share = pred_office
-                    self._diag_house_share = self._instant_kg_per_hour
+            elif self._uid == "office":                                                                                         
+                if is_office_reliable:                                                                     
+                    # Biuro stabilne - uczy si.. na swojej cz....ci                                        
+                    share_ratio = active_pred_office / total_pred                                          
+                    office_kg_h = self._instant_kg_per_hour * share_ratio                                  
+                    self._diag_office_share = office_kg_h                                                  
+                    self._diag_house_share = self._instant_kg_per_hour - office_kg_h                       
+                    new_instant_eff = (office_kg_h * 24.0) / effective_delta                               
+                    do_math_update = True                                                                  
+                elif is_office_warming_up:                                                                                      
+                    # Biuro grzeje, ale faza przej..ciowa - brak nauki (do_math_update = False)                                 
+                    share_ratio = active_pred_office / total_pred                                          
+                    self._diag_office_share = self._instant_kg_per_hour * share_ratio                      
+                    self._diag_house_share = self._instant_kg_per_hour - self._diag_office_share           
+                    do_math_update = False                                                                 
+                else:                                                                                      
+                    # Biuro wy....czone - brak nauki, wszystko przypisane (diagnostycznie) do domu         
+                    self._diag_office_share = 0.0                                                          
+                    self._diag_house_share = self._instant_kg_per_hour                                     
+                    do_math_update = False                                                                 
 
             # 6. FINALIZACJA
             if do_math_update and 0.1 < new_instant_eff < 15.0:
@@ -1234,32 +1253,41 @@ class StokerDHWConsumptionTotalSensor(StokerEntity, SensorEntity, RestoreEntity)
         
         # 1. Wykrycie resetu (północ: np. przejście z 1.6 na 0.0)
         if current_dhw_stat < self._last_dhw_stat:
-            delta_dhw = 0.0 
-        
-        # 2. Wykrycie "skoku z zera" tuż po północy (np. z 0.0 na 0.1)
-        elif self._last_dhw_stat == 0.0 and current_dhw_stat > 0:
-            _LOGGER.debug("Pierwszy odczyt po północy (%s kg). Ustawiam nową bazę.", current_dhw_stat)
-            delta_dhw = 0.0
-            
-        # 3. Standardowy przyrost w ciągu dnia
-        else:
-            delta_dhw = current_dhw_stat - self._last_dhw_stat
+            now_hour = datetime.now().hour
+            # Jeśli jest północ, akceptujemy reset i zerujemy bazę
+            if now_hour == 0 or now_hour == 23:
+                _LOGGER.debug("Poprawny reset nocny CWU: %s", current_dhw_stat)
+                self._last_dhw_stat = current_dhw_stat
+                return
+            else:
+                # Jeśli to środek dnia, to błąd API. 
+                # NIE nadpisujemy self._last_dhw_stat, po prostu wychodzimy.
+                _LOGGER.warning(
+                    "Zignorowano błąd API CWU (spadek wartości): %s -> %s", 
+                    self._last_dhw_stat, current_dhw_stat
+                )
+                return 
 
-        # Aktualizacja bazy dla następnego cyklu
+        # 2. Wykrycie "skoku z zera" po północy
+        if self._last_dhw_stat == 0.0 and current_dhw_stat > 0:
+            self._last_dhw_stat = current_dhw_stat
+            return
+
+        # 3. Aktualizacja bazy dla następnego cyklu
         self._last_dhw_stat = current_dhw_stat
         
-        # 4. Zapis tylko realnych i sensownych przyrostów
-        if delta_dhw > 0:
-            # Sanity check: ignoruj skoki powyżej 2kg w jednym cyklu API (np. błąd danych)
-            if delta_dhw < 2.0:
-                current_total = self._attr_native_value or 0.0
-                self._attr_native_value = round(current_total + delta_dhw, 4)
-                self.async_write_ha_state()
-            else:
-                _LOGGER.debug(
-                    "Zignorowano podejrzany przyrost CWU (%s kg). Sprawdź stabilność API.", 
-                    delta_dhw
-                )
+        # 4. Zapis przyrostu z Sanity Check
+        if 0 < delta_dhw < 2.0:
+            current_total = self._attr_native_value or 0.0
+            self._attr_native_value = round(current_total + delta_dhw, 4)
+            # Ważne: aktualizujemy bazę TYLKO gdy odczyt był prawidłowy
+            self._last_dhw_stat = current_dhw_stat
+            self.async_write_ha_state()
+        elif delta_dhw >= 2.0:
+             _LOGGER.error("Zablokowano nienaturalny skok CWU: %s kg", delta_dhw)
+             # Synchronizujemy bazę, żeby nie wisiała, ale nie dodajemy do native_value
+             self._last_dhw_stat = current_dhw_stat
+
 
 # --- OUTPUTS SENSOR ---
 class StokerOutputSensor(StokerEntity, SensorEntity):
