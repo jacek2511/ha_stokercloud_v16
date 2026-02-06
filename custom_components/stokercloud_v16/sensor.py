@@ -1234,34 +1234,26 @@ class StokerDHWConsumptionTotalSensor(StokerEntity, SensorEntity, RestoreEntity)
             _LOGGER.debug("Zainicjalizowano sensor CWU Total. Startowa baza: %s kg", self._last_dhw_stat)
 
         self.async_write_ha_state()
-
+    
     def _handle_coordinator_update(self) -> None:
         raw_current = self._get_api_data("stats.dhw_day")
-        
         if raw_current is None:
             return
-            
         current_dhw_stat = float(raw_current)
         
-        # Jeśli sensor nie zdążył się zainicjalizować w async_added_to_hass
         if not self._initialized:
             self._last_dhw_stat = current_dhw_stat
             self._initialized = True
             return
 
-        delta_dhw = 0.0
-        
-        # 1. Wykrycie resetu (północ: np. przejście z 1.6 na 0.0)
+        # 1. Wykrycie resetu (północ)
         if current_dhw_stat < self._last_dhw_stat:
             now_hour = datetime.now().hour
-            # Jeśli jest północ, akceptujemy reset i zerujemy bazę
             if now_hour == 0 or now_hour == 23:
                 _LOGGER.debug("Poprawny reset nocny CWU: %s", current_dhw_stat)
                 self._last_dhw_stat = current_dhw_stat
                 return
             else:
-                # Jeśli to środek dnia, to błąd API. 
-                # NIE nadpisujemy self._last_dhw_stat, po prostu wychodzimy.
                 _LOGGER.warning(
                     "Zignorowano błąd API CWU (spadek wartości): %s -> %s", 
                     self._last_dhw_stat, current_dhw_stat
@@ -1272,21 +1264,22 @@ class StokerDHWConsumptionTotalSensor(StokerEntity, SensorEntity, RestoreEntity)
         if self._last_dhw_stat == 0.0 and current_dhw_stat > 0:
             self._last_dhw_stat = current_dhw_stat
             return
+        delta_dhw = current_dhw_stat - self._last_dhw_stat
 
-        # 3. Aktualizacja bazy dla następnego cyklu
-        self._last_dhw_stat = current_dhw_stat
-        
-        # 4. Zapis przyrostu z Sanity Check
+        # 3. Zapis przyrostu z Sanity Check
         if 0 < delta_dhw < 2.0:
             current_total = self._attr_native_value or 0.0
             self._attr_native_value = round(current_total + delta_dhw, 4)
-            # Ważne: aktualizujemy bazę TYLKO gdy odczyt był prawidłowy
+            # Aktualizujemy bazę dopiero po udanym doliczeniu delty
             self._last_dhw_stat = current_dhw_stat
+            _LOGGER.debug("CWU Total: dodano +%s kg. Nowy stan: %s", delta_dhw, self._attr_native_value)
             self.async_write_ha_state()
+            
         elif delta_dhw >= 2.0:
              _LOGGER.error("Zablokowano nienaturalny skok CWU: %s kg", delta_dhw)
-             # Synchronizujemy bazę, żeby nie wisiała, ale nie dodajemy do native_value
+             # Synchronizujemy bazę, żeby nie blokować kolejnych odczytów, ale nie dodajemy do licznika
              self._last_dhw_stat = current_dhw_stat
+             # Nie robimy write_ha_state, bo stan native_value się nie zmienił
 
 
 # --- OUTPUTS SENSOR ---
