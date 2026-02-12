@@ -1,4 +1,4 @@
-[![GitHub Latest Release][releases_shield]][latest_release] [![License][license-shield]](LICENSE) [![HACS][hacsbadge]][hacs]
+[![GitHub Latest Release][releases_shield]][latest_release] ![Downloads][downloads] [![License][license-shield]](LICENSE) [![GH-last-commit][latest_commit]][commits] [![HACS][hacsbadge]][hacs]
 
 # homeassistant-stokercloud_v16
 
@@ -25,5 +25,7 @@ Currently the integration is read-only.
 [releases_shield]: https://img.shields.io/github/release/jacek2511/ha_stokercloud_v16.svg?style=popout
 [license-shield]: https://img.shields.io/github/license/jacek2511/ha_stokercloud_v16
 [latest_commit]: https://img.shields.io/github/last-commit/jacek2511/ha_stokercloud_v16.svg?style=flat-square
+[downloads]: https://img.shields.io/github/downloads/jacek2511/ha_stokercloud_v16/total
 [hacs]: https://hacs.xyz
 [hacsbadge]: https://img.shields.io/badge/HACS-Custom-orange.svg
+[commits]: https://github.com/jack2511/ha_stokercloud_v16/commits/master
